@@ -30,6 +30,12 @@
 #define DIR_RIGHT  2u
 #define DIR_LEFT   3u
 
+/* VRAM tile layout. On DMG, GBDK's default puts background and sprite
+ * tiles in the same memory (0x8000), so they must not share indices.
+ * Sprites use tiles 0..17; the grass tile goes right after them.      */
+#define NUM_SPRITE_TILES  18u
+#define GRASS_TILE        NUM_SPRITE_TILES   /* tile 18 */
+
 /* The hardware draws each sprite 8 px right / 16 px below its OAM
  * position, so screen coordinates are converted with these offsets. */
 #define OAM_X(x)  ((uint8_t)((x) + 8u))
@@ -133,7 +139,7 @@ static const char ART_GRASS[8][9] = {
 
 /* 18 tiles: hero = 4 facings x 4 tiles (tiles 0..15),
  * tile 16 = projectile orb, tile 17 = blank (bottom half of orb sprite). */
-static uint8_t sprite_tiles[18u * 16u];
+static uint8_t sprite_tiles[NUM_SPRITE_TILES * 16u];
 static uint8_t grass_tile[16];
 static uint8_t bg_map[20u * 18u];
 
@@ -293,15 +299,17 @@ void main(void)
     build_tile(ART_SHOT, &sprite_tiles[256u]);   /* tile 16: orb   */
     memset(&sprite_tiles[272u], 0, 16);          /* tile 17: blank */
 
-    /* Background: grass everywhere. */
-    for (i = 0u; i < 20u * 18u; i++)
-        bg_map[i] = 0u;
-    set_bkg_data(0u, 1u, grass_tile);
-    set_bkg_tiles(0u, 0u, 20u, 18u, bg_map);
-
-    /* Sprites. */
-    set_sprite_data(0u, 18u, sprite_tiles);
+    /* Sprites: tiles 0..17. */
+    set_sprite_data(0u, NUM_SPRITE_TILES, sprite_tiles);
     SPRITES_8x16;
+
+    /* Background: grass everywhere, using tile 18 so it doesn't
+     * collide with the sprite tiles in shared VRAM.
+     * (FIX 1: the old uint8_t loop to 360 never terminated.
+     *  FIX 2: grass used to sit at tile 0 and get overwritten.) */
+    set_bkg_data(GRASS_TILE, 1u, grass_tile);
+    memset(bg_map, GRASS_TILE, sizeof bg_map);
+    set_bkg_tiles(0u, 0u, 20u, 18u, bg_map);
 
     player_x   = 72u;
     player_y   = 64u;
