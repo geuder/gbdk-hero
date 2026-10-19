@@ -30,11 +30,26 @@ jobs:
           lcc -v
           ls -l /opt/gbdk/bin/sdcc
 
-      - name: Build ROM
-        run: make
+      - name: Build ROMs
+        run: |
+          make
+          make -C tether
+          make -C stealth
 
       - name: Upload hero.gb
         uses: actions/upload-artifact@v4
         with:
           name: hero-gb
           path: hero.gb
+
+      - name: Upload tether.gb
+        uses: actions/upload-artifact@v4
+        with:
+          name: tether-gb
+          path: tether/tether.gb
+
+      - name: Upload stealth.gb
+        uses: actions/upload-artifact@v4
+        with:
+          name: stealth-gb
+          path: stealth/stealth.gb
