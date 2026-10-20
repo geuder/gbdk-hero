@@ -14,6 +14,7 @@
  * A cone is moved by clearing its old quads and setting its new ones, a few quads at a time
  * within the frame's time budget; cones take turns.
  */
+#pragma bank 1
 #include <gb/gb.h>
 #include <stdint.h>
 #include <string.h>
@@ -53,7 +54,7 @@ static uint8_t frame_pos(void)
 }
 #define OUT_OF_TIME() ((LCDC_REG & LCDCF_ON) && frame_pos() > cr_lylimit)
 
-void cone_reset(void)
+void cone_reset(void) BANKED
 {
     memset(qbits, 0, sizeof qbits);
     memset(cshown, 0, sizeof cshown);
@@ -520,7 +521,7 @@ static void job_start(uint8_t n)
 }
 
 /* Call once per frame with every cone's eye and facing; stop at frame position lylimit. */
-void cones_update(const uint8_t *on, const uint8_t *ex, const uint8_t *ey, const uint8_t *k, uint8_t lylimit)
+void cones_update(const uint8_t *on, const uint8_t *ex, const uint8_t *ey, const uint8_t *k, uint8_t lylimit) BANKED
 {
     uint8_t n, i, f;
     for (n = 0; n < NCONES; n++) {                     /* targets */
@@ -549,7 +550,7 @@ void cones_update(const uint8_t *on, const uint8_t *ex, const uint8_t *ey, const
 }
 
 /* Does cone n light any quad of the w x h box at (bx, by)? */
-uint8_t cone_sees_box(uint8_t n, uint8_t bx, uint8_t by, uint8_t w, uint8_t h)
+uint8_t cone_sees_box(uint8_t n, uint8_t bx, uint8_t by, uint8_t w, uint8_t h) BANKED
 {
     uint8_t x0 = bx >> 2, x1 = (uint8_t)(bx + w - 1u) >> 2, y0 = by >> 2, y1 = (uint8_t)(by + h - 1u) >> 2, x, b = (uint8_t)(1u << n);
     const uint8_t *qb;
@@ -564,4 +565,4 @@ uint8_t cone_sees_box(uint8_t n, uint8_t bx, uint8_t by, uint8_t w, uint8_t h)
     return 0;
 }
 
-uint8_t cone_sees(uint8_t n, uint8_t bx, uint8_t by) { return cone_sees_box(n, bx, by, 8u, 13u); }
+uint8_t cone_sees(uint8_t n, uint8_t bx, uint8_t by) BANKED { return cone_sees_box(n, bx, by, 8u, 13u); }

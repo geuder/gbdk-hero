@@ -285,6 +285,129 @@ def bar_sprites():
     return out
 
 
+# ---------------------------------------------------------------- items, bushes (stage 3)
+ITEM_ORDER = ["shuriken", "rope", "trap", "stone", "coin"]
+ITEM_ART = {   # 8 x 8, digits = colour, '.' = see-through (as in the browser prototype)
+    "shuriken": ["...3....", "...33...", "3.3223..", ".32..233", "332..23.", "..3223.3", "...33...", "....3..."],
+    "rope":     ["..3333..", ".322223.", "32.33.23", "323..323", "323..323", "32.33.23", ".322223.", "..3333.3"],
+    "trap":     ["........", "3.3.3.3.", "32323232", "32222223", "3.3333.3", "33....33", "23333332", "........"],
+    "stone":    ["........", "........", "..333...", ".31123..", "3122223.", "3222223.", ".33333..", "........"],
+    "coin":     ["..3333..", ".311113.", "31122113", "31211213", "31211213", "31122113", ".311113.", "..3333.."],
+}
+# Sprite palette 0 (OBP0 0xD0) shows colour 1 white, 2 light grey, 3 black: map the art's shades
+# (1 light, 2 dark, 3 black in the browser) onto it as 1 -> 1, 2 -> 2, 3 -> 3.
+
+
+def item_grid(name, w=8, h=16):
+    g = [[0] * w for _ in range(h)]
+    for y, row in enumerate(ITEM_ART[name]):
+        for x, c in enumerate(row):
+            if c != ".":
+                g[y][x] = int(c)
+    return g
+
+
+def bush_art():
+    """The browser's 24 x 24 bush (same random sequence): -1 = none, else colour."""
+    a, r = [], 7
+    def rnd2():
+        nonlocal r
+        r = (r * 1103515245 + 12345) & 0x7fffffff
+        return r / 0x7fffffff
+    for y in range(24):
+        for x in range(24):
+            dx, dy = x - 11.5, y - 12
+            d = math.hypot(dx, dy * 1.08) + math.sin(math.atan2(dy, dx) * 7) * 1.2
+            c = -1
+            if d < 11.6:
+                c = 2
+                if d > 10.4:
+                    c = 3
+                elif rnd2() < 0.18:
+                    c = 3
+                elif dy < -2 and dx < 3 and rnd2() < 0.3:
+                    c = 1
+            a.append(c)
+    return a
+
+
+def bush_tiles():
+    """Bush over plain ground, cut into cells for each placement offset used by the levels:
+    (0, 0): 3 x 3 cells, (4, 0): 4 x 3, (0, 4): 3 x 4. Order: row by row."""
+    art = bush_art()
+    sets = []
+    for ox, oy in ((0, 0), (4, 0), (0, 4)):
+        cw, ch = (24 + ox + 7) // 8, (24 + oy + 7) // 8
+        tiles = []
+        for cy in range(ch):
+            for cx in range(cw):
+                g = [[0] * 8 for _ in range(8)]
+                for y in range(8):
+                    for x in range(8):
+                        ax, ay = cx * 8 + x - ox, cy * 8 + y - oy
+                        if 0 <= ax < 24 and 0 <= ay < 24 and art[ay * 24 + ax] >= 0:
+                            g[y][x] = art[ay * 24 + ax]
+                tiles.append(tile_bytes(g))
+        sets.append(tiles)
+    return sets
+
+
+def icon_tiles():
+    """Item icons for the item bar (light background, like the browser's slot)."""
+    out = []
+    for name in ITEM_ORDER:
+        g = [[0] * 8 for _ in range(8)]
+        for y, row in enumerate(ITEM_ART[name]):
+            for x, c in enumerate(row):
+                if c != ".":
+                    g[y][x] = int(c)
+        out.append(tile_bytes(g))
+    return out
+
+
+def extra_sprites(hero_img):
+    """Stage 3 sprites (8x16 pairs): items, shadow, aiming cross, coin glint (4 sizes),
+    see-through silhouettes (crouching player, lying body; dithered, light)."""
+    spr = []
+    for name in ITEM_ORDER:
+        spr += sprite8x16(item_grid(name))
+    g = [[0] * 8 for _ in range(16)]                       # shadow: 4 x 1 dark, at row 0
+    for x in range(2, 6):
+        g[0][x] = 2
+    spr += sprite8x16(g)
+    g = [[0] * 8 for _ in range(16)]                       # cross centred at (4, 4)
+    for x in (0, 1, 2, 6, 7):
+        g[4][x] = 3
+    for y in (0, 1, 2, 6, 7):
+        g[y][4] = 3
+    spr += sprite8x16(g)
+    for n in (1, 2, 3, 4):                                  # glint: star centred at (4, 4)
+        g = [[0] * 8 for _ in range(16)]
+        g[4][4] = 1
+        for k in range(1, n + 1):
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                x, y = 4 + dx * k, 4 + dy * k
+                if 0 <= x < 8 and 0 <= y < 8:
+                    g[y][x] = 3 if (k == n and n > 1) else 1
+        spr += sprite8x16(g)
+    down = hero_cell(hero_img, 0, 0)                        # crouching: waist rows 7-9 left out
+    crouch = [[0] * 16 for _ in range(16)]
+    for sy in range(16):
+        if 7 <= sy <= 9:
+            continue
+        ty = sy + 3 if sy < 7 else sy
+        for x in range(16):
+            crouch[ty][x] = down[sy][x]
+    side = hero_cell(hero_img, 6, 0)
+    lying = [[side[x][15 - y] for x in range(16)] for y in range(16)]
+    # every other pixel, flat: crouching player white, lying body light grey (palette 0), so they
+    # read against the dark leaves
+    for fig, c in ((crouch, 1), (lying, 2)):
+        g = [[(c if fig[y][x] and not ((x + y) & 1) else 0) for x in range(16)] for y in range(16)]
+        spr += sprite16(g)
+    return spr
+
+
 def cone_quads():
     """Per angle: the 4 x 4 px quarter-cells ("quads") of the cone, as (dx, dy) quad offsets from
     the eye's quad: a quad is in when its centre is within CONE_LEN of the eye's quad centre and
@@ -437,7 +560,15 @@ def main():
         bg += t
     for t in pit_tiles():
         bg += t
+    bush_sets = bush_tiles()
+    for st in bush_sets:
+        for t in st:
+            bg += t
+    for t in icon_tiles():
+        bg += t
     nbg = len(bg) // 16
+    xspr = extra_sprites(img)
+    nxspr = len(xspr) // 16
     lit_src = ground_tiles() + floor_tiles()          # base tiles 0..4 can be lit
     lit = []
     for t in lit_tiles(lit_src):
@@ -451,14 +582,30 @@ def main():
               " * Hero art: \"8-Directional Game Boy Character Template\" by GibbonGL (CC0 1.0),\n"
               " * https://gibbongl.itch.io/8-directional-gameboy-character-template\n"
               " * All other graphics drawn for this game in tools/make_gfx.py. */\n")
-    with open(sys.argv[2], "w") as f:
+    out_c = sys.argv[2]                                      # src/gfx.c (bank 0); also gfx_tiles.c, gfx_cone.c
+    out_dir = out_c.rsplit("/", 1)[0] + "/" if "/" in out_c else ""
+    with open(out_c, "w") as f:
         f.write(credit + '#include <stdint.h>\n#include "gfx.h"\n\n')
-        f.write(c_array("spr_tiles", spr) + "\n\n" + c_array("bg_tiles", bg) + "\n\n")
-        f.write("/* lit tiles (loaded at B_LIT): 15 per base tile 0..4 */\n" + c_array("lit_tiles", lit) + "\n\n")
         f.write("const uint8_t hero_anim[8][4] = {\n")
         for steps in anim:
             f.write("    { " + ", ".join(str(s) for s in steps) + " },\n")
-        f.write("};\n\n")
+        f.write("};\n")
+    with open(out_dir + "gfx_tiles.c", "w") as f:            # bank 2: loaded into VRAM once
+        f.write(credit + '#pragma bank 2\n#include <gb/gb.h>\n#include <stdint.h>\n#include "gfx.h"\n\n')
+        f.write(c_array("spr_tiles", spr) + "\n\n" + c_array("bg_tiles", bg) + "\n\n")
+        f.write("/* lit tiles (loaded at B_LIT): 15 per base tile 0..4 */\n" + c_array("lit_tiles", lit) + "\n\n")
+        f.write("/* stage 3 sprites (loaded at T_ITEM) */\n" + c_array("xspr_tiles", xspr) + "\n\n")
+        f.write("""/* Load all tiles into VRAM (LCD off). Lives in bank 2 with the data. */
+void load_tiles(void) BANKED
+{
+    set_sprite_data(0, SPR_TILES, spr_tiles);
+    set_sprite_data(B_LIT, LIT_TILES, lit_tiles);   /* (background tiles >= 128 share this memory) */
+    set_sprite_data(T_ITEM, XSPR_TILES, xspr_tiles);
+    set_bkg_data(0, BG_TILES, bg_tiles);
+}
+""")
+    with open(out_dir + "gfx_cone.c", "w") as f:             # bank 1: with the cone code
+        f.write(credit + '#pragma bank 1\n#include <stdint.h>\n#include "gfx.h"\n\n')
         f.write(f"/* view cones: {CONE_LEN} px, {CONE_DEG} degrees, {CONE_ANGLES} angles, ~{avg} quads (4 x 4 px) each */\n")
         f.write(c_array("cone_off", offs, 8, "uint16_t") + "\n\n")
         f.write(c_array("cone_data", cone) + "\n\n")
@@ -469,6 +616,11 @@ def main():
         f.write(credit + f"""#ifndef GFX_H
 #define GFX_H
 #include <stdint.h>
+#include <gb/gb.h>
+
+/* gfx_tiles.c (bank 2): tile data, loaded once */
+void load_tiles(void) BANKED;
+/* gfx_cone.c (bank 1): cone and line-of-sight tables, only for cone.c (also bank 1) */
 
 extern const uint8_t spr_tiles[{nspr} * 16];
 extern const uint8_t bg_tiles[{nbg} * 16];
@@ -483,6 +635,7 @@ extern const uint8_t los_data[{len(los)}];
 #define BG_TILES    {nbg}u
 #define LIT_TILES   {nlit}u
 #define LIT_BASES   5u      /* base tiles 0..LIT_BASES-1 can be lit */
+#define XSPR_TILES  {nxspr}u
 #define CONE_LEN    {CONE_LEN}u
 #define CONE_ANGLES {CONE_ANGLES}u
 #define LOS_R       {LOS_R}u
@@ -503,6 +656,17 @@ extern const uint8_t los_data[{len(los)}];
 #define B_ARROW     (B_FONT + {len(FONT_CHARS)}u)   /* left, right */
 #define B_PIT       (B_ARROW + 2u)  /* 16: ravine, by open neighbours up 1 left 2 right 4 down 8 */
 #define B_LIT       (SPR_TILES > 128u ? SPR_TILES : 128u)   /* lit tiles: B_LIT + base * 15 + mask - 1 */
+#define B_BUSH      (B_PIT + 16u)   /* bush cells: offset (0,0) 3x3, (4,0) 4x3, (0,4) 3x4 */
+#define B_BUSH_X    (B_BUSH + 9u)
+#define B_BUSH_Y    (B_BUSH_X + 12u)
+#define B_ICON      (B_BUSH_Y + 12u)  /* item icons for the bar: shuriken rope trap stone coin */
+
+/* stage 3 sprites (8x16 pairs, after the lit tiles) */
+#define T_ITEM      ((B_LIT + LIT_TILES + 1u) & 0xFEu)   /* 5 items x 2 */
+#define T_SHADOW    (T_ITEM + 10u)
+#define T_CROSS     (T_ITEM + 12u)
+#define T_GLARE     (T_ITEM + 14u)  /* 4 sizes x 2 */
+#define T_GHOST     (T_ITEM + 22u)  /* see-through: crouching (4 tiles), lying (4 tiles) */
 
 #endif
 """)

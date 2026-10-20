@@ -5,9 +5,14 @@
 #ifndef GFX_H
 #define GFX_H
 #include <stdint.h>
+#include <gb/gb.h>
+
+/* gfx_tiles.c (bank 2): tile data, loaded once */
+void load_tiles(void) BANKED;
+/* gfx_cone.c (bank 1): cone and line-of-sight tables, only for cone.c (also bank 1) */
 
 extern const uint8_t spr_tiles[130 * 16];
-extern const uint8_t bg_tiles[66 * 16];
+extern const uint8_t bg_tiles[104 * 16];
 extern const uint8_t hero_anim[8][4];   /* [sheet row][walk step] -> frame (tiles frame*4) */
 extern const uint16_t cone_off[64];
 extern const uint8_t cone_data[7560];   /* per angle: count, then (dx, dy) quad offsets */
@@ -16,9 +21,10 @@ extern const uint16_t los_off[45];
 extern const uint8_t los_data[315];
 
 #define SPR_TILES   130u
-#define BG_TILES    66u
+#define BG_TILES    104u
 #define LIT_TILES   75u
 #define LIT_BASES   5u      /* base tiles 0..LIT_BASES-1 can be lit */
+#define XSPR_TILES  30u
 #define CONE_LEN    60u
 #define CONE_ANGLES 64u
 #define LOS_R       8u
@@ -39,5 +45,16 @@ extern const uint8_t los_data[315];
 #define B_ARROW     (B_FONT + 42u)   /* left, right */
 #define B_PIT       (B_ARROW + 2u)  /* 16: ravine, by open neighbours up 1 left 2 right 4 down 8 */
 #define B_LIT       (SPR_TILES > 128u ? SPR_TILES : 128u)   /* lit tiles: B_LIT + base * 15 + mask - 1 */
+#define B_BUSH      (B_PIT + 16u)   /* bush cells: offset (0,0) 3x3, (4,0) 4x3, (0,4) 3x4 */
+#define B_BUSH_X    (B_BUSH + 9u)
+#define B_BUSH_Y    (B_BUSH_X + 12u)
+#define B_ICON      (B_BUSH_Y + 12u)  /* item icons for the bar: shuriken rope trap stone coin */
+
+/* stage 3 sprites (8x16 pairs, after the lit tiles) */
+#define T_ITEM      ((B_LIT + LIT_TILES + 1u) & 0xFEu)   /* 5 items x 2 */
+#define T_SHADOW    (T_ITEM + 10u)
+#define T_CROSS     (T_ITEM + 12u)
+#define T_GLARE     (T_ITEM + 14u)  /* 4 sizes x 2 */
+#define T_GHOST     (T_ITEM + 22u)  /* see-through: crouching (4 tiles), lying (4 tiles) */
 
 #endif

@@ -5,6 +5,7 @@
 #define GAME_H
 
 #include <stdint.h>
+#include <gb/gb.h>
 
 #define SCR_W    160u
 #define SCR_H    144u
@@ -41,18 +42,20 @@ void vram_reset(void);
 /* ---- cone.c: view cones, drawn by swapping background tiles per 4 x 4 px quarter-cell ---- */
 #define NCONES 5u
 extern uint8_t los_open;            /* set when the level has no walls */
-void cone_reset(void);              /* forget all cone tiles (after the map is redrawn) */
+void cone_reset(void) BANKED;              /* forget all cone tiles (after the map is redrawn) */
 /* Call every frame with each cone: on[n], eye (ex[n], ey[n]), facing k[n] (0..CONE_ANGLES-1).
  * Changed cones are redrawn over the next frames, stopping each frame when the frame position
  * (scan lines since vblank started, 0..153) passes lylimit. */
-void cones_update(const uint8_t *on, const uint8_t *ex, const uint8_t *ey, const uint8_t *k, uint8_t lylimit);
+void cones_update(const uint8_t *on, const uint8_t *ex, const uint8_t *ey, const uint8_t *k, uint8_t lylimit) BANKED;
 /* 1 if cone n lights a pixel of the 8 x 13 box at (bx, by): "the NPC sees the player". */
-uint8_t cone_sees(uint8_t n, uint8_t bx, uint8_t by);
-uint8_t cone_sees_box(uint8_t n, uint8_t bx, uint8_t by, uint8_t w, uint8_t h);
+uint8_t cone_sees(uint8_t n, uint8_t bx, uint8_t by) BANKED;
+uint8_t cone_sees_box(uint8_t n, uint8_t bx, uint8_t by, uint8_t w, uint8_t h) BANKED;
 
 /* ---- levels.c ---- */
 typedef struct { uint8_t x, y, w, h; } Box;
 typedef struct { uint8_t x, y, face, sweep; const uint8_t *route; uint8_t step; } NpcDef;
+typedef struct { uint8_t kind, x, y; } ItemDef;   /* kind: IT_ below; x, y: top left of the 8 x 8 item */
+enum { IT_SHURIKEN, IT_ROPE, IT_TRAP, IT_STONE, IT_COIN, IT_KINDS };
 typedef struct {
     const char *name;
     const char *const *map;         /* CELLS_H rows of CELLS_W: . ground , floor # wall o ravine */
@@ -61,6 +64,7 @@ typedef struct {
     uint8_t flags;                  /* LF_ below */
     uint8_t nbush; const Box *bush;
     uint8_t nnpc; const NpcDef *npc;
+    uint8_t nitem; const ItemDef *item;   /* nitem 0xFF: one of each kind at random spots */
 } Level;
 #define LF_LOCKED   1u              /* exit locked (opens with a hostage, later) */
 #define LF_ALLDOWN  2u              /* clear the level when every NPC is down */

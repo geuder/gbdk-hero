@@ -21,6 +21,7 @@ static const char *const MAP1[CELLS_H] = {
     "...................." };
 static const Box BUSH1[] = { { 4, 56, 24, 24 } };
 static const NpcDef NPC1[] = { { 80, 52, 64, 40, 0, 0 } };
+static const ItemDef ITEM1[] = { { IT_STONE, 100, 112 } };
 
 /* ---- 2 DISTRACTION: a patrol walking left and right ---- */
 static const char *const MAP2[CELLS_H] = {
@@ -32,6 +33,7 @@ static const char *const MAP2[CELLS_H] = {
 static const Box BUSH2[] = { { 120, 92, 24, 24 } };
 static const uint8_t ROUTE2[] = { R_GO, 140, 68, R_TURN, SPIN, R_GO, 20, 68, R_TURN, SPIN, R_END };
 static const NpcDef NPC2[] = { { 20, 68, 0, 0, ROUTE2, 0 } };
+static const ItemDef ITEM2[] = { { IT_COIN, 24, 108 }, { IT_STONE, 44, 120 } };
 
 /* ---- 3 THE RAVINE (Patrick's sketch) ---- */
 static const char *const MAP3[CELLS_H] = {
@@ -55,6 +57,8 @@ static const uint8_t ROUTE3B[] = {     /* G2: the bottom half, right side first 
     R_GO, 140, 116, R_TURN, SPIN,      /* east to P2.1 */
     R_GO, 140, 68, R_TURN, BACK, R_END };  /* north to G2, turn round */
 static const NpcDef NPC3[] = { { 20, 68, 192, 0, ROUTE3A, 0 }, { 140, 68, 64, 0, ROUTE3B, 0 } };
+static const ItemDef ITEM3[] = {       /* next to the spawn, and one in each corner */
+    { IT_COIN, 92, 120 }, { IT_COIN, 2, 2 }, { IT_COIN, 150, 2 }, { IT_COIN, 2, 126 }, { IT_COIN, 150, 126 } };
 
 /* ---- 4 GUARD ROTATION (Patrick's sketch): two facing pairs and a walker on a diamond.
  * Every guard runs this one loop, starting at a different step. Posts A (G1) and B (G2) at the
@@ -90,6 +94,7 @@ static const NpcDef NPC4[] = {
     { 148, 68, 96, 0, ROTATION, 0 },           /* G3: walking from P2 to G2 */
     { AX, CY, 0, 0, ROTATION, 18 },            /* G4: top pair, facing east */
     { BX, CY, 128, 0, ROTATION, 22 } };        /* G5: top pair, facing west */
+static const ItemDef ITEM4[] = { { IT_TRAP, 96, 64 }, { IT_ROPE, 56, 64 } };   /* either side of the middle bush */
 
 /* ---- 5 THE HOUSE: the first prototype's map ---- */
 static const char *const MAP5[CELLS_H] = {
@@ -103,9 +108,9 @@ static const uint8_t ROUTE5[] = { R_GO, 20, 12, R_GO, 20, 132, R_GO, 140, 132, R
 static const NpcDef NPC5[] = { { 140, 12, 128, 0, ROUTE5, 0 }, { 100, 52, 128, 40, 0, 0 } };
 
 const Level levels[NUM_LEVELS] = {
-    { "FIRST STEPS",    MAP1, 80, 126, { 72, 0, 16, 10 }, 0,  1, BUSH1, 1, NPC1 },
-    { "DISTRACTION",    MAP2, 12, 126, { 140, 0, 20, 10 }, 0, 1, BUSH2, 1, NPC2 },
-    { "THE RAVINE",     MAP3, 80, 126, { 72, 0, 16, 10 }, 0,  0, 0,     2, NPC3 },
-    { "GUARD ROTATION", MAP4, 12, 126, { 72, 0, 16, 10 }, 0,  4, BUSH4, 5, NPC4 },
-    { "THE HOUSE",      MAP5, 10, 131, { 72, 0, 16, 10 }, LF_LOCKED | LF_ALLDOWN, 2, BUSH5, 2, NPC5 },
+    { "FIRST STEPS",    MAP1, 80, 126, { 72, 0, 16, 10 }, 0,  1, BUSH1, 1, NPC1, 1, ITEM1 },
+    { "DISTRACTION",    MAP2, 12, 126, { 140, 0, 20, 10 }, 0, 1, BUSH2, 1, NPC2, 2, ITEM2 },
+    { "THE RAVINE",     MAP3, 80, 126, { 72, 0, 16, 10 }, 0,  0, 0,     2, NPC3, 5, ITEM3 },
+    { "GUARD ROTATION", MAP4, 12, 126, { 72, 0, 16, 10 }, 0,  4, BUSH4, 5, NPC4, 2, ITEM4 },
+    { "THE HOUSE",      MAP5, 10, 131, { 72, 0, 16, 10 }, LF_LOCKED | LF_ALLDOWN, 2, BUSH5, 2, NPC5, 0xFF, 0 },
 };

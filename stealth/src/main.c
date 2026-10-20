@@ -22,16 +22,14 @@
 #include <string.h>
 #include "game.h"
 #include "gfx.h"
+#include "world.h"
 
 /* ---- tuning (as in the browser prototype) ----
  * NPCs are updated every other frame (half of them each frame), so their per-update steps and
  * timers below are for 2 frames: the speeds and times in seconds are the prototype's. */
 #define PLAYER_SPEED   192u     /* 8.8 fixed point px per frame (0.75) */
 #define PLAYER_DIAG    136u     /* x 1/sqrt(2) */
-#define PATROL_SPEED   256u     /* 0.5 px/frame (per update: 1 px) */
-#define SEARCH_SPEED   320u
 #define ATTACK_SPEED   512u
-#define TURN_RATE      6u       /* facing units (256 per turn) per update = 3 per frame */
 #define SPOT_FULL      2160u    /* detection meter: 135 frames x 16 at the cone's far end */
 #define SPOT_DECAY     32u      /* per update out of sight */
 #define SEARCH_FRAMES  240u     /* updates: 8 s of searching, then back to duty */
@@ -41,8 +39,6 @@
 #define TOUCH_X        8u       /* feet this close = bumping into the NPC */
 #define TOUCH_Y        6u
 #define LOOK_RADIUS    CONE_LEN /* "look again" on arrival */
-#define KO_FRAMES      600u     /* updates: knocked out for 20 s */
-#define LIE_DROP       4u       /* a lying figure is drawn this much lower */
 #define CONE_LY        134u     /* cone work stops this many lines after vblank started (scan line 124) */
 #define CONE_LY_WALLS  118u     /* (levels with walls: a line-of-sight check can take a while) */
 #define SWAY_STEP      874u     /* look-around sway: one cycle per 150 frames (per update) */
@@ -55,8 +51,6 @@ const uint16_t ROWP[CELLS_H + 1u] = {
     PIDX(0, 12), PIDX(0, 13), PIDX(0, 14), PIDX(0, 15), PIDX(0, 16), PIDX(0, 17) };
 
 /* ---- game state (global so the map file / emulator can watch them) ---- */
-enum { G_TITLE, G_PLAY, G_DEAD, G_CLEAR };
-enum { NS_NORMAL, NS_SUSPICIOUS, NS_ATTACK, NS_DOWN };
 
 uint8_t gstate, level_no, sel_level, nnpc;
 const Level *lv;
@@ -68,57 +62,28 @@ uint8_t signals[2];             /* guard rotation: bumps sent so far */
 uint8_t n_down;                 /* NPCs knocked out */
 uint8_t lag_frames;             /* frames the work didn't fit in (for testing) */
 #ifdef PROF                     /* make CFLAGS+=-DPROF: time per part of the frame, in DIV ticks (64 cycles) */
-uint16_t prof[12];              /* in scan lines (114 cycles); the frame is 154 lines */
+uint16_t prof[20];              /* in scan lines (114 cycles); the frame is 154 lines */
 uint16_t prof_t;
 uint8_t prof_over, prof_wrap, prof_max;
 uint8_t prof_log[64], prof_li;
 uint16_t prof_now(void) { uint8_t l, t; do { t = (uint8_t)sys_time; l = LY_REG; } while (t != (uint8_t)sys_time); return (uint16_t)t * 154u + (l >= 144u ? l - 144u : l + 10u); }   /* sys_time counts at line 144 */
-uint8_t prof_pos[12], prof_worst[12];
+uint8_t prof_pos[20], prof_worst[20];
 void prof_mark(uint8_t i) { uint16_t t_ = prof_now(); { uint8_t l = LY_REG; prof_pos[i] = l >= 144u ? (uint8_t)(l - 144u) : (uint8_t)(l + 10u); } prof[i] += (uint16_t)(t_ >= prof_t ? t_ - prof_t : t_ + 39424u - prof_t); prof_t = t_; }
 #define PROF_MARK(i) prof_mark(i)
 #else
 #define PROF_MARK(i)
 #endif
 
-typedef struct {
-    uint16_t fx, fy;            /* feet centre, 8.8 */
-    uint8_t ang, want;          /* facing now / wanted, 0..255, 0 = east, 64 = south */
-    uint8_t state;
-    uint16_t spot;              /* detection meter */
-    uint8_t seen;               /* player in the cone this frame */
-    uint16_t state_t;           /* search time left / knock-out time left */
-    uint8_t tx, ty;             /* destination (px) */
-    uint8_t nx, ny;             /* next point on the way (px) */
-    uint8_t path_ok, arrived;
-    uint8_t pause_t;
-    uint8_t sx, sy;             /* search centre (px) */
-    uint8_t lx, ly;             /* last known player position (px) */
-    uint8_t retarget_t;
-    uint8_t anim_t, step;
-    uint8_t look_t;             /* guard: pause at each end of the sweep */
-    int8_t look;                /* look-around offset, quarter facing units */
-    uint16_t sway;              /* sway phase */
-    /* duty */
-    const uint8_t *route;       /* 0 = guard at a post */
-    uint8_t ri;                 /* byte offset of the current step */
-    uint8_t route_dest, relay, returning, walking;
-    uint16_t rot_left;          /* turning: units left, 0xFFFF = not turning */
-    uint8_t turn_end, wait_base, has_wait;
-    uint8_t home_x, home_y;     /* where it last stood on its route */
-    uint8_t post_x, post_y, face, sweep;
-    uint8_t field;              /* path-finding field held, or 0xFF */
-    uint8_t pad[64 - 49];       /* 64 bytes: npc[n] is a shift, not a multiply */
-} Npc;
 Npc npc[NNPC];
 
 /* ---- small maths ---- */
 static uint16_t rng = 0xACE1u;
-static uint8_t rnd(void) { rng = rng * 25173u + 13849u; return (uint8_t)(rng >> 8); }
+uint8_t rnd(void) { rng = rng * 25173u + 13849u; return (uint8_t)(rng >> 8); }
 
 static const uint8_t ATAN_T[33] = {     /* atan(i/32) in 1/256 turns */
     0, 1, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18,
     19, 20, 21, 22, 23, 24, 25, 25, 26, 27, 28, 29, 29, 30, 31, 31, 32 };
-static uint8_t atan2b(int16_t dx, int16_t dy)
+uint8_t atan2b(int16_t dx, int16_t dy)
 {
     uint16_t ax = dx < 0 ? (uint16_t)-dx : (uint16_t)dx, ay = dy < 0 ? (uint16_t)-dy : (uint16_t)dy;
     uint8_t a;
@@ -136,10 +101,9 @@ static const int8_t SWAY_T[32] = {      /* 28 * sin: +-10 degrees in quarter fac
 static const uint8_t ROW_FROM_OCT[8] = { 6, 7, 0, 1, 2, 3, 4, 5 };   /* facing octant -> sheet row */
 static const uint8_t DIR_FROM[3][3] = { { 3, 4, 5 }, { 2, 0, 6 }, { 1, 0, 7 } };
 
-static uint8_t ad(uint8_t a, uint8_t b) { return a > b ? a - b : b - a; }
+uint8_t ad(uint8_t a, uint8_t b) { return a > b ? a - b : b - a; }
 
-#define PX(f) ((uint8_t)((f) >> 8))
-static uint8_t cell_solid(uint8_t x, uint8_t y) { return solid[ROWP[y >> 3] + (x >> 3)]; }
+uint8_t cell_solid(uint8_t x, uint8_t y) { return solid[ROWP[y >> 3] + (x >> 3)]; }
 
 /* Line of sight between two points (walls block it, the ravine doesn't). */
 static uint8_t los(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
@@ -159,8 +123,8 @@ static uint8_t los(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 
 /* ---- text ---- */
 static const char FONT_CHARS[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!,.-:";
-static uint8_t rowbuf[20];
-static void text_row(const char *s)
+uint8_t rowbuf[20];
+void text_row(const char *s)
 {
     uint8_t i, n = (uint8_t)strlen(s), x0 = (uint8_t)((20u - n) >> 1);
     const char *f;
@@ -170,7 +134,7 @@ static void text_row(const char *s)
         rowbuf[x0 + i] = (uint8_t)(B_FONT + (f - FONT_CHARS));
     }
 }
-static void win_row(uint8_t n)                       /* rowbuf -> window row n (queued) */
+void win_row(uint8_t n)                       /* rowbuf -> window row n (queued) */
 {
     uint8_t i, *w = (uint8_t *)(0x9C00u + ((uint16_t)n << 5));
     for (i = 0; i < 20u; i++) vram_put(w + i, rowbuf[i]);
@@ -244,6 +208,32 @@ static void build_map(void)
             base_tile[c] = t;
         }
     }
+    for (t = 0; t < lv->nbush; t++) {                  /* bushes: tiles per placement offset (x or y +4) */
+        const Box *b = &lv->bush[t];
+        uint8_t w = (b->x & 7u) ? 4u : 3u, h = (b->y & 7u) ? 4u : 3u, tile = (b->x & 7u) ? B_BUSH_X : (b->y & 7u) ? B_BUSH_Y : B_BUSH;
+        for (y = 0; y < h; y++)
+            for (x = 0; x < w; x++, tile++)
+                if ((b->x >> 3) + x < CELLS_W && (b->y >> 3) + y < CELLS_H) base_tile[PIDX((b->x >> 3) + x, (b->y >> 3) + y)] = tile;
+    }
+}
+#define IS_BUSH(t) ((uint8_t)((t) - B_BUSH) < (uint8_t)(B_ICON - B_BUSH))
+uint8_t in_bush(uint8_t x, uint8_t y)
+{
+    uint8_t k;
+    const Box *b = lv->bush;
+    if (!IS_BUSH(base_tile[ROWP[y >> 3] + (x >> 3)])) return 0;   /* (quick: not on a bush cell) */
+    for (k = lv->nbush; k; k--, b++)
+        if ((uint8_t)(x - b->x) < b->w && (uint8_t)(y - b->y) < b->h) return 1;
+    return 0;
+}
+static uint8_t near_bush(uint8_t x, uint8_t y)         /* a 16 x 16 figure with feet at (x, y) overlaps a bush cell */
+{
+    const uint8_t *r0, *r1;                            /* (a bush is 3 cells wide: checking the corners is enough) */
+    uint8_t x0 = x >= 8u ? (uint8_t)((x - 8u) >> 3) : 0u, x1 = (uint8_t)((x + 7u) >> 3);
+    if (!lv->nbush) return 0;
+    r0 = &base_tile[ROWP[y >= 13u ? (uint8_t)((y - 13u) >> 3) : 0u]];
+    r1 = &base_tile[ROWP[(uint8_t)(y + 2u) >> 3]];
+    return IS_BUSH(r0[x0]) || IS_BUSH(r0[x1]) || IS_BUSH(r1[x0]) || IS_BUSH(r1[x1]);
 }
 static void draw_map(void)            /* LCD off */
 {
@@ -452,7 +442,7 @@ static void bfs_step(void)
     if (bfs_run()) { npc[bfs_cur].path_ok = 1; bfs_cur = 0xFF; }
 }
 
-static void set_dest(uint8_t n, uint8_t x, uint8_t y)
+void set_dest(uint8_t n, uint8_t x, uint8_t y)
 {
     Npc *e = &npc[n];
     e->tx = x; e->ty = y;
@@ -462,7 +452,7 @@ static void set_dest(uint8_t n, uint8_t x, uint8_t y)
 }
 
 /* ---- player ---- */
-static uint8_t feet_blocked(uint8_t x, uint8_t y)  /* feet box x-4..x+3, y-3..y+2 */
+uint8_t feet_blocked(uint8_t x, uint8_t y)  /* feet box x-4..x+3, y-3..y+2 */
 {
     if (x < 4u || x > SCR_W - 4u || y < 3u || y > PLAY_H - 3u) return 1;
     return cell_solid(x - 4u, y - 3u) || cell_solid(x + 3u, y - 3u)
@@ -473,7 +463,8 @@ static void update_player(void)
 {
     int8_t dx = 0, dy = 0;
     uint16_t sp;
-    uint8_t n;
+    uint8_t n, slow = grab_n != 0xFFu || crouch;
+    if (tie_n != 0xFFu) { pstep = 0; panim = 13; return; }   /* busy tying */
     if (keys & J_LEFT) dx--;
     if (keys & J_RIGHT) dx++;
     if (keys & J_UP) dy--;
@@ -482,7 +473,7 @@ static void update_player(void)
         pdir = DIR_FROM[dy + 1][dx + 1];
         if (++panim >= 14u) { panim = 0; pstep = (pstep + 1u) & 3u; }
     } else { pstep = 0; panim = 13; }
-    sp = (dx && dy) ? PLAYER_DIAG : PLAYER_SPEED;
+    sp = slow ? ((dx && dy) ? 91u : 128u) : ((dx && dy) ? PLAYER_DIAG : PLAYER_SPEED);   /* crouching, dragging: 0.5 */
     psubx = dx ? psubx + sp : 0;
     psuby = dy ? psuby + sp : 0;
     for (n = (uint8_t)(psubx >> 8), psubx &= 0xFFu; n; n--)
@@ -527,7 +518,7 @@ static void npc_reset(void)
 }
 
 /* Walk towards the destination along the distance field. Returns 1 on arrival. */
-static uint8_t npc_walk(uint8_t n, uint16_t speed)
+uint8_t npc_walk(uint8_t n, uint16_t speed)
 {
     Npc *e = &npc[n];
     uint8_t *d;
@@ -582,7 +573,7 @@ static uint8_t npc_walk(uint8_t n, uint16_t speed)
     return 0;
 }
 
-static void npc_turn(Npc *e)
+void npc_turn(Npc *e)
 {
     int8_t df = (int8_t)(e->want - e->ang);
     if (df > (int8_t)TURN_RATE) e->ang += TURN_RATE;
@@ -590,7 +581,7 @@ static void npc_turn(Npc *e)
     else e->ang = e->want;
 }
 
-static void kill_player(void)
+void kill_player(void)
 {
     gstate = G_DEAD;
     banner("YOU WERE CAUGHT", "A: TRY AGAIN");
@@ -618,7 +609,7 @@ static void search_next(uint8_t n)
     set_dest(n, (uint8_t)(cx * 8u + 4u), (uint8_t)(cy * 8u + 4u));
 }
 
-static void go_suspicious(uint8_t n, uint8_t x, uint8_t y)
+void go_suspicious(uint8_t n, uint8_t x, uint8_t y)
 {
     Npc *e = &npc[n];
     e->state = NS_SUSPICIOUS;
@@ -659,6 +650,20 @@ static void back_to_duty(uint8_t n)
         if (dd < bd) { bd = dd; e->ri = (uint8_t)(p - e->route); }
     }
     e->route_dest = 0; e->rot_left = 0xFFFFu;
+}
+
+/* Back to duty from a coin errand: carry on with the current step. */
+void resume_duty(uint8_t n)
+{
+    Npc *e = &npc[n];
+    e->state = NS_NORMAL;
+    if (!e->route) set_dest(n, e->post_x, e->post_y);
+    else resume_route(n);
+}
+static void coin_off(Npc *e)                            /* off a coin errand: someone else may have it */
+{
+    if (e->state == NS_COIN && e->c_item < NITEMS && items[e->c_item].kind == IT_COIN) items[e->c_item].flags &= (uint8_t)~IF_CLAIMED;
+    e->c_item = 0xFF;
 }
 
 static uint8_t spot_free(uint8_t n, uint8_t x, uint8_t y)   /* nobody else stands at (x, y) */
@@ -730,9 +735,10 @@ static uint8_t npc_duty(uint8_t n)
     return 0;
 }
 
-static void knock_out(uint8_t n)
+void knock_out(uint8_t n)
 {
     Npc *e = &npc[n];
+    coin_off(e); e->d_on = 0;
     e->state = NS_DOWN; e->seen = 0; e->state_t = KO_FRAMES; e->look = 0; e->spot = 0;
     n_down++;
     bfs_pending &= (uint8_t)~(1u << n);
@@ -740,16 +746,19 @@ static void knock_out(uint8_t n)
 }
 
 /* Approximate distance (max + 3/8 min). */
-static uint8_t dist8(uint8_t a, uint8_t b) { return a > b ? (uint8_t)(a + ((b * 3u) >> 3)) : (uint8_t)(b + ((a * 3u) >> 3)); }
+uint8_t dist8(uint8_t a, uint8_t b) { return a > b ? (uint8_t)(a + ((b * 3u) >> 3)) : (uint8_t)(b + ((a * 3u) >> 3)); }
 
 static uint8_t sees_body(uint8_t n)                    /* a knocked-out NPC in the cone */
 {
     uint8_t k;
     if (!n_down) return 0;
+    Npc *e = &npc[n];
     for (k = 0; k < nnpc; k++) {
         Npc *o = &npc[k];
         if (k == n || o->state != NS_DOWN) continue;
+        if (in_bush(PX(o->fx), (uint8_t)(PX(o->fy) - 6u + LIE_DROP))) continue;   /* hidden in a bush */
         if (cone_sees_box(n, (uint8_t)(PX(o->fx) - 6u), (uint8_t)(PX(o->fy) - 9u + LIE_DROP), 12u, 8u)) {
+            coin_off(e); e->d_on = 0;
             go_suspicious(n, PX(o->fx), PX(o->fy));
             return 1;
         }
@@ -763,14 +772,28 @@ static void update_npc(uint8_t n)
     uint8_t x = PX(e->fx), y = PX(e->fy), px = PX(pfx), py = PX(pfy);
 
     if (e->state == NS_DOWN) {                         /* back on its feet after 20 s, suspicious */
-        if (--e->state_t) return;
+        if (e->tied || --e->state_t) return;           /* (tied up: down for good) */
         n_down--;
+        if (grab_n == n) grab_n = 0xFF;
+        if (tie_n == n) { tie_n = 0xFF; e->state = NS_ATTACK; kill_player(); return; }   /* woke up while being tied */
         go_suspicious(n, x, y);
         return;
     }
-    if (ad(x, px) < TOUCH_X && ad(y, py) < TOUCH_Y) { kill_player(); return; }   /* bumped into it */
+    if (e->state == NS_GONE) return;
+    /* bumped into it (a calm NPC walks past you crouching in a bush) */
+    if (ad(x, px) < TOUCH_X && ad(y, py) < TOUCH_Y && !(crouch && (e->state == NS_NORMAL || e->state == NS_COIN))) { kill_player(); return; }
+    if (n_armed) {                                     /* stepped in a trap */
+        Item *it = items;
+        for (px = NITEMS; px; px--, it++)
+            if ((it->flags & IF_ARMED) && (uint8_t)(it->x + 11u - x) < 15u && (uint8_t)(it->y + 10u - y) < 13u) {
+                it->flags &= (uint8_t)~IF_ARMED; n_armed--; knock_out(n); return;
+            }
+        px = PX(pfx);
+    }
     if (e->state != NS_ATTACK) {
         if (e->seen) {                                 /* being spotted: stop and stare */
+            if (e->state == NS_COIN) { coin_off(e); resume_duty(n); }   /* seeing you beats the coin */
+            e->d_on = 0;
             uint8_t d = dist8(ad(px, x), ad((uint8_t)(py - 6u), (uint8_t)(y - 5u)));
             if (d > CONE_LEN) d = CONE_LEN;
             if (d < 1u) d = 1u;
@@ -785,7 +808,10 @@ static void update_npc(uint8_t n)
             if (e->state == NS_NORMAL) go_suspicious(n, e->lx, e->ly);
         }
     }
-    if (e->state == NS_NORMAL && sees_body(n)) return;
+    if (e->d_on && e->state != NS_ATTACK) { npc_distract(n); return; }   /* looking at where a stone landed */
+    if ((e->state == NS_NORMAL || e->state == NS_COIN) && sees_body(n)) return;
+    if (e->state == NS_COIN) { npc_coin(n); return; }
+    if (e->state == NS_NORMAL && n_thrown && npc_see_coin(n)) return;   /* a coin in view: go and get it */
 
     switch (e->state) {
     case NS_NORMAL:
@@ -836,25 +862,25 @@ static void level_done(const char *text)
     banner(text, level_no + 1u < NUM_LEVELS ? "A: NEXT LEVEL" : "A: BACK TO START");
 }
 
-static void check_clear(void)
+void check_clear(void)
 {
     uint8_t n, px = PX(pfx), py = PX(pfy);
     const Box *x = &lv->exit;
     if (gstate != G_PLAY) return;
     if (lv->flags & LF_ALLDOWN) {
-        for (n = 0; n < nnpc && npc[n].state == NS_DOWN; n++) ;
+        for (n = 0; n < nnpc && (npc[n].state == NS_DOWN || npc[n].state == NS_GONE); n++) ;
         if (n == nnpc) { level_done("AREA CLEAR!"); return; }
     }
     if (!(lv->flags & LF_LOCKED) && px >= x->x && px < (uint8_t)(x->x + x->w) && (uint8_t)(py - 4u) < (uint8_t)(x->y + x->h))
         level_done("LEVEL CLEAR!");
 }
 
-static void try_takedown(void)
+void try_takedown(void)
 {
     uint8_t n, px = PX(pfx), py = PX(pfy);
     for (n = 0; n < nnpc; n++) {
         Npc *e = &npc[n];
-        if (e->state == NS_DOWN || e->state == NS_ATTACK) continue;
+        if (e->state == NS_DOWN || e->state == NS_GONE || e->state == NS_ATTACK) continue;
         if (ad(PX(e->fx), px) <= TAKEDOWN_DIST && ad(PX(e->fy), py) <= TAKEDOWN_DIST) {
             if (e->state == NS_SUSPICIOUS && e->seen) { kill_player(); return; }   /* it fights back */
             knock_out(n);
@@ -880,23 +906,31 @@ static void draw_sprites(void)
     const Box *bx = &lv->exit;
     o = (uint8_t *)&shadow_OAM[OAM_PLAYER];
     x = PX(pfx); y = (uint8_t)(PX(pfy) + 3u);          /* (sprite y + 16 - 13) */
-    if (gstate == G_DEAD) { t = T_LYING; y += LIE_DROP; } else t = (uint8_t)(*person_frame(pdir, pstep) << 2);
+    if (gstate == G_DEAD) { t = T_LYING; y += LIE_DROP; }
+    else if (crouch) t = T_GHOST;                      /* crouching in a bush: see-through */
+    else t = (uint8_t)(*person_frame(pdir, pstep) << 2);
     o[0] = y; o[1] = x; o[2] = t; o[4] = y; o[5] = (uint8_t)(x + 8u); o[6] = (uint8_t)(t + 2u);
     o = (uint8_t *)&shadow_OAM[OAM_NPC];
     ic = (uint8_t *)&shadow_OAM[OAM_ICON];
     for (n = 0, e = npc; n < NNPC; n++, e++, o += 8, ic += 4) {
         if (n >= nnpc) { o[0] = 0; o[4] = 0; ic[0] = 0; continue; }
-        if (((n ^ (uint8_t)frame) & 1u) && gstate == G_PLAY && frame > 2u) continue;   /* moved last frame: drawn then */
+        if (((n ^ (uint8_t)frame) & 1u) && gstate == G_PLAY && frame > 2u && n != grab_n) continue;   /* moved last frame: drawn then */
+        if (e->state == NS_GONE) { o[0] = 0; o[4] = 0; ic[0] = 0; continue; }
         x = PX(e->fx); y = (uint8_t)(PX(e->fy) + 3u);
         if (e->state == NS_DOWN) {
-            t = T_LYING; y += LIE_DROP;
+            y += LIE_DROP;
+            if (in_bush(x, (uint8_t)(PX(e->fy) - 6u + LIE_DROP))) {   /* in a bush: see-through over the leaves */
+                t = (uint8_t)(T_GHOST + 4u); o[3] = o[7] = 0;
+                if ((e->vanish_t >> 2) & 1u) y = 0;    /* a tied body flickers out */
+            } else { t = T_LYING; o[3] = o[7] = S_PALETTE; }
             o[0] = y; o[1] = x; o[2] = t; o[4] = y; o[5] = (uint8_t)(x + 8u); o[6] = (uint8_t)(t + 2u);
             /* time left until it wakes up */
-            t = (uint8_t)(((e->state_t + 99u) * 41u) >> 12);   /* ceil(state_t / 100): 0..6 */
+            t = e->tied ? 6u : (uint8_t)(((e->state_t + 99u) * 41u) >> 12);   /* ceil(state_t / 100): 0..6 */
             ic[0] = (uint8_t)(y - 2u); ic[1] = (uint8_t)(x + 4u); ic[2] = (uint8_t)(T_BAR + t * 2u); ic[3] = S_PALETTE;
             continue;
         }
         t = (uint8_t)(*person_frame(ROW_FROM_OCT[(uint8_t)(e->ang + 16u) >> 5], e->step) << 2);
+        o[3] = o[7] = near_bush(x, PX(e->fy)) ? (S_PALETTE | 0x80u) : S_PALETTE;   /* behind the leaves */
         o[0] = y; o[1] = x; o[2] = t; o[4] = y; o[5] = (uint8_t)(x + 8u); o[6] = (uint8_t)(t + 2u);
         ic[3] = 0;
         if (e->state == NS_ATTACK) t = T_BANG;
@@ -924,7 +958,7 @@ static void draw_cones(void)
     uint8_t bx = (uint8_t)(PX(pfx) - 4u), by = (uint8_t)(PX(pfy) - 12u);
     Npc *e;
     for (n = (uint8_t)frame & 1u, e = &npc[n]; n < NCONES; n += 2u, e += 2) {   /* the NPCs updated this frame */
-        if (n >= nnpc || e->state == NS_DOWN) { on[n] = 0; continue; }
+        if (n >= nnpc || e->state == NS_DOWN || e->state == NS_GONE) { on[n] = 0; continue; }
         on[n] = 1;
         ex[n] = PX(e->fx);
         ey[n] = (uint8_t)(PX(e->fy) - 5u);
@@ -934,7 +968,9 @@ static void draw_cones(void)
     /* one NPC looks per frame, in turn; its "seen" stays until it looks again */
     if (nnpc) {
         if (++look_n >= nnpc) look_n = 0;
-        npc[look_n].seen = gstate == G_PLAY && cone_sees(look_n, bx, by);
+        e = &npc[look_n];
+        /* crouching in a bush: only attackers see you */
+        e->seen = gstate == G_PLAY && e->state != NS_DOWN && e->state != NS_GONE && !(crouch && e->state != NS_ATTACK) && cone_sees(look_n, bx, by);
     }
     PROF_MARK(2);
 }
@@ -955,6 +991,7 @@ static void start_level(uint8_t i)
     signals[0] = signals[1] = 0;
     bfs_pending = 0; bfs_cur = 0xFF;
     npc_reset();
+    items_reset();                                     /* (bank 3) */
     while (bfs_pending || bfs_cur != 0xFFu) bfs_step();   /* LCD is off: runs to the end */
     text_row(level_label(i));
     set_win_tiles(0, 0, 20, 1, rowbuf);
@@ -982,7 +1019,7 @@ static void show_title(void)
 {
     static const char *const T[CELLS_H] = {
         "", "", "STEALTH", "", "SELECT LEVEL", "", "", "", "", "", "",
-        "START: PLAY", "D-PAD: MOVE", "A: TAKE DOWN", "SELECT: LEVELS", "", "ART: GIBBONGL CC0" };
+        "START: PLAY", "D-PAD: MOVE", "A: ACTION B: CROUCH", "SELECT: LEVELS", "", "ART: GIBBONGL CC0" };
     uint8_t y, k;
     DISPLAY_OFF;
     for (k = 0; k < 40u; k++) hide(k);
@@ -1000,9 +1037,7 @@ void main(void)
     uint8_t k, vbl;
     DISPLAY_OFF;
     LCDC_REG = (uint8_t)((LCDC_REG & (uint8_t)~LCDCF_BG8000) | LCDCF_WIN9C00 | LCDCF_BG9800 | LCDCF_OBJ16);
-    set_sprite_data(0, SPR_TILES, spr_tiles);
-    set_sprite_data(B_LIT, LIT_TILES, lit_tiles);      /* (background tiles >= 128 share this memory) */
-    set_bkg_data(0, BG_TILES, bg_tiles);
+    load_tiles();                                      /* (bank 2) */
     BGP_REG = 0xE4u;           /* 0 white, 1 light grey (cones), 2 dark grey, 3 black */
     OBP0_REG = 0xD0u;          /* player and icons: 1 = white, 2 = light grey, 3 = black */
     OBP1_REG = 0xE4u;          /* NPCs: the same sprites one shade darker */
@@ -1039,8 +1074,8 @@ void main(void)
         PROF_MARK(7);
 #endif
         if (gstate == G_PLAY) {
-            update_player();
-            if (k & J_A) try_takedown();
+            if (!aiming) update_player();
+            items_player(k);                           /* (bank 3) items, A, B, dragging, tying */
             check_clear();
             bfs_step();                                /* (early in the frame: path finding starts only then) */
         } else if (k & J_A) {
@@ -1055,13 +1090,15 @@ void main(void)
             for (k = frame & 1u; k < nnpc && gstate == G_PLAY; k += 2u) update_npc(k);   /* half per frame */
         PROF_MARK(3);
         draw_sprites();
+        items_draw();
+        if (gstate == G_PLAY) { if (frame >= 120u) items_bar(frame == 120u); }   /* (the level name first) */
+        else for (k = 0; k < 40u; k++) if (shadow_OAM[k].y >= 113u) hide(k);   /* nothing over the banner */
         PROF_MARK(4);
-        PROF_MARK(5);
         cones_work();
         PROF_MARK(8);
 #ifdef PROF
         prof_log[prof_li & 63u] = LY_REG; prof_li++;
-        { uint8_t l = LY_REG, f = l >= 144u ? (uint8_t)(l - 144u) : (uint8_t)(l + 10u); if (f > 145u || f < 8u) { prof_over++; if (f < 8u) memcpy(prof_worst, prof_pos, 12); } if (f < 8u) prof_wrap++; if (f > prof_max) prof_max = f; }
+        { uint8_t l = LY_REG, f = l >= 144u ? (uint8_t)(l - 144u) : (uint8_t)(l + 10u); if (f > 145u || f < 8u) { prof_over++; if (f < 8u) memcpy(prof_worst, prof_pos, 20); } if (f < 8u) prof_wrap++; if (f > prof_max) prof_max = f; }
 #endif
         PROF_MARK(6);                                  /* (VRAM writes go out in vblank: cones only change map bytes) */
     }
