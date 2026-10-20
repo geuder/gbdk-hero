@@ -1,0 +1,809 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body style="margin:0"><title>Tether Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one handheld console, centred; screen on top, controls below, tuning strip under it. Single deliberate look. */
+:root {
+  color-scheme: dark;
+  --page: #1c211e;          /* table the console lies on */
+  --shell: #d6d2c6;         /* console plastic */
+  --shell-edge: #b9b4a6;
+  --bezel: #4b4f5a;         /* screen surround */
+  --ink: #2a2b33;           /* printed labels on plastic */
+  --pad: #26262b;           /* d-pad and pills */
+  --btn: #9a2453;           /* A / B buttons */
+  --btn-press: #761a3f;
+  --led: #e0384a;
+  --muted: #9ea69f;         /* text on the page */
+  --lcd0: #e0f8d0; --lcd1: #88c070; --lcd2: #346856; --lcd3: #081820;
+  --f-pixel: "Silkscreen", "Courier New", monospace;
+  --f-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+}
+html, body { height: 100%; }
+body {
+  background: var(--page); color: var(--muted);
+  font-family: var(--f-body); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px;
+  box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.console {
+  width: min(100%, 400px);
+  background: var(--shell);
+  border-radius: 14px 14px 56px 14px;
+  box-shadow: inset 0 -4px 0 var(--shell-edge), 0 10px 30px rgba(0,0,0,.45);
+  padding: 14px 14px 22px;
+  box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.bezel {
+  background: var(--bezel);
+  border-radius: 10px 10px 32px 10px;
+  padding: 10px 14px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bezel-top { display: flex; align-items: center; gap: 8px; font-family: var(--f-pixel); font-size: 10px; color: #b7bac4; letter-spacing: .08em; }
+.led { width: 7px; height: 7px; border-radius: 50%; background: var(--led); box-shadow: 0 0 6px var(--led); }
+.bezel-top .levelname { margin-left: auto; color: #dfe1e8; }
+canvas#screen {
+  display: block; width: 100%; max-width: 100%; aspect-ratio: 160 / 144;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  background: var(--lcd0);
+  touch-action: none;
+}
+.readout {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: space-between;
+  font-family: var(--f-pixel); font-size: 11px; color: var(--ink); letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+  padding-inline: 2px;
+}
+.readout b { font-weight: 400; color: var(--btn); }
+.controls { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; }
+.dpad {
+  position: relative; width: 132px; height: 132px; touch-action: none; cursor: pointer;
+}
+.dpad .arm { position: absolute; background: var(--pad); border-radius: 5px; box-shadow: 0 3px 0 #111114; }
+.dpad .h { left: 0; right: 0; top: 44px; height: 44px; }
+.dpad .v { top: 0; bottom: 0; left: 44px; width: 44px; }
+.dpad .hub { position: absolute; left: 56px; top: 56px; width: 20px; height: 20px; border-radius: 50%; background: #1a1a1e; }
+.dpad .lit { position: absolute; width: 44px; height: 44px; border-radius: 6px; background: rgba(255,255,255,.18); pointer-events: none; }
+.right { display: flex; flex-direction: column; align-items: flex-end; gap: 16px; }
+.ab { display: flex; gap: 14px; transform: rotate(-20deg); margin-right: 4px; }
+.ab .wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.round {
+  width: 54px; height: 54px; border-radius: 50%; border: 0;
+  background: var(--btn); box-shadow: 0 4px 0 var(--btn-press);
+  touch-action: none; cursor: pointer;
+}
+.round:active, .round.down { transform: translateY(3px); box-shadow: 0 1px 0 var(--btn-press); }
+.round.on { background: #c22f69; }
+.lbl { font-family: var(--f-pixel); font-size: 10px; color: var(--ink); letter-spacing: .08em; }
+.pills { display: flex; gap: 14px; justify-content: center; }
+.pill-wrap { display: flex; flex-direction: column; align-items: center; gap: 5px; transform: rotate(-20deg); }
+.pill {
+  width: 46px; height: 13px; border-radius: 7px; border: 0;
+  background: #77757a; box-shadow: 0 2px 0 #55535a; touch-action: none; cursor: pointer;
+}
+.pill:active, .pill.down { transform: translateY(2px); box-shadow: none; }
+button:focus-visible, input:focus-visible { outline: 2px solid #f6c945; outline-offset: 3px; }
+.tune {
+  width: min(100%, 400px); box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 10px;
+  font-size: 13px; line-height: 1.45;
+}
+.tune label { display: flex; align-items: center; gap: 12px; font-family: var(--f-pixel); font-size: 11px; letter-spacing: .06em; color: #c9d0c9; }
+.tune input[type=range] { flex: 1; min-width: 0; accent-color: var(--lcd1); }
+.tune output { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; }
+.tune p { margin: 0; max-width: 62ch; }
+.tune kbd { font-family: var(--f-pixel); font-size: 10px; color: #c9d0c9; }
+</style>
+
+<main class="console" aria-label="Tether prototype">
+  <div class="bezel">
+    <div class="bezel-top"><span class="led" aria-hidden="true"></span><span>TETHER</span><span class="levelname" id="levelname">LEVEL 1</span></div>
+    <canvas id="screen" width="160" height="144" aria-label="Game screen"></canvas>
+  </div>
+
+  <div class="readout" aria-live="off">
+    <span>AIR <b id="r-air">100</b></span>
+    <span>HOSE <b id="r-len">0</b>/<span id="r-max">0</span></span>
+    <span>HP <b id="r-hp">3</b></span>
+    <span>GEMS <b id="r-gems">0/0</b></span>
+  </div>
+
+  <div class="controls">
+    <div class="dpad" id="dpad" role="group" aria-label="Direction pad">
+      <div class="arm h"></div><div class="arm v"></div><div class="hub"></div>
+      <div class="lit" id="lit" hidden></div>
+    </div>
+    <div class="right">
+      <div class="ab">
+        <div class="wrap"><button class="round" id="btn-b" aria-label="Reset level"></button><span class="lbl">RESET</span></div>
+        <div class="wrap"><button class="round" id="btn-a" aria-label="Show reach circle" aria-pressed="false"></button><span class="lbl">REACH</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pills">
+    <div class="pill-wrap"><button class="pill" id="btn-sel" aria-label="Next level"></button><span class="lbl">LEVEL</span></div>
+    <div class="pill-wrap"><button class="pill" id="btn-start" aria-label="Reset level"></button><span class="lbl">RESET</span></div>
+  </div>
+</main>
+
+<section class="tune">
+  <label for="len">HOSE LENGTH <input type="range" id="len" min="40" max="320" step="5" value="150"><output id="len-out" for="len">150</output></label>
+  <p>Swim with the D-pad. The diver's air hose runs straight from the water pump and catches on rocks it swings across; swim back around a rock and it comes free. Touch another pump to switch to it: the hose reels in from the old pump to the diver, then attaches to the new pump. Reeling uses air. Fish bite the hose: the first bites use up its HP, after that every bite makes a hole that leaks 1 air per second. At 0 air the diver drowns. Collect every gem, then swim back to the start pump to be lifted out. Five levels. Each level has its own hose length; the slider overrides it.</p>
+  <p><kbd>ARROWS</kbd> move, <kbd>R</kbd> reset, <kbd>L</kbd> next level, <kbd>SPACE</kbd> reach circle.</p>
+</section>
+
+<script>
+(() => {
+  "use strict";
+  const W = 160, H = 144, PLAY_H = 136;            // bottom 8 px is the HUD row
+  const C = ["#e0f8d0", "#88c070", "#346856", "#081820"];
+  const cv = document.getElementById("screen");
+  const g = cv.getContext("2d");
+  g.imageSmoothingEnabled = false;
+
+  // ---------- pixel art (' ' transparent, '.' lightest, '+' light, '=' dark, '#' darkest) ----------
+  const ART_ROCK = [
+    "                ",
+    "     #####      ",
+    "   ##+++++###   ",
+    "  #++....++++#  ",
+    " #++..+++++++=# ",
+    " #+.++++++++++=#",
+    "#++++++++==+++=#",
+    "#+++++++====++=#",
+    "#++++++++==+++=#",
+    "#=++++++++++++=#",
+    " #=++++++++++=# ",
+    " #==++++++++==# ",
+    "  ##=========#  ",
+    "    #########   ",
+    "                ",
+    "                "];
+  // Water pump seen from above: housing, hand wheel, status light (L) at the bottom.
+  const ART_PUMP = [
+    "  ############  ",
+    " #============# ",
+    "#=++++++++++++=#",
+    "#=+..######..+=#",
+    "#=+.#+====+#.+=#",
+    "#=+#+=+..+=+#+=#",
+    "#=+#=+.##.+=#+=#",
+    "#=+#=.####.=#+=#",
+    "#=+#=.####.=#+=#",
+    "#=+#=+.##.+=#+=#",
+    "#=+#+=+..+=+#+=#",
+    "#=+.#+====+#.+=#",
+    "#=+..######..+=#",
+    "#=+++++LL+++++=#",
+    "#==============#",
+    " ############## "];
+  const ART_FISH = [                               // faces left; mouth at the left edge
+    "   #####    ",
+    " ##++++=#  #",
+    "#+.#+++==#=#",
+    "#++++++===##",
+    "#=+++++===##",
+    " #==+++==#=#",
+    "  ##=====# #",
+    "    ####    "];
+  const ART_GEM = [
+    "   ##   ",
+    "  #..#  ",
+    " #.++=# ",
+    "#.++++=#",
+    "#+++==+#",
+    " #+===# ",
+    "  #==#  ",
+    "   ##   "];
+  const CH = { ".": 0, "+": 1, "=": 2, "#": 3 };
+  function artCanvas(rows, light) {
+    const c = document.createElement("canvas");
+    c.width = rows[0].length; c.height = rows.length;
+    const x = c.getContext("2d");
+    rows.forEach((r, y) => [...r].forEach((ch, i) => {
+      if (ch === "L") ch = light || "=";
+      if (ch !== " ") { x.fillStyle = C[CH[ch]]; x.fillRect(i, y, 1, 1); }
+    }));
+    return c;
+  }
+  const SPR_ROCK = artCanvas(ART_ROCK), SPR_GEM = artCanvas(ART_GEM);
+  // Second fish frame: tail fin closed. Alternating the two frames is the tail flap.
+  const ART_FISH_FLAP = [
+    "   #####    ",
+    " ##++++=#   ",
+    "#+.#+++==#  ",
+    "#++++++===##",
+    "#=+++++===##",
+    " #==+++==#  ",
+    "  ##=====#  ",
+    "    ####    "];
+  const flip = a => a.map(r => [...r].reverse().join(""));
+  const SPR_FISH_L = artCanvas(ART_FISH), SPR_FISH_R = artCanvas(flip(ART_FISH));
+  const SPR_FISH_L2 = artCanvas(ART_FISH_FLAP), SPR_FISH_R2 = artCanvas(flip(ART_FISH_FLAP));
+  const SPR_PUMP_OFF = artCanvas(ART_PUMP, "="), SPR_PUMP_ON = artCanvas(ART_PUMP, "."), SPR_PUMP_ON2 = artCanvas(ART_PUMP, "#");
+
+  // Hero: "8-Directional Game Boy Character Template" by GibbonGL (CC0). 8 rows of facings, 4 walk steps.
+  const hero = new Image();
+  hero.src = "data:image/png;base64,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";
+  let lying = null;                                 // death pose: side frame turned 90 degrees
+  hero.addEventListener("load", () => {
+    const c = document.createElement("canvas"); c.width = c.height = 16;
+    const x = c.getContext("2d"); x.imageSmoothingEnabled = false;
+    x.translate(8, 8); x.rotate(-Math.PI / 2); x.drawImage(hero, 0, 6 * 16, 16, 16, -8, -8, 16, 16);
+    lying = c;
+  });
+  const DIRS = { "0,1": 0, "-1,1": 1, "-1,0": 2, "-1,-1": 3, "0,-1": 4, "1,-1": 5, "1,0": 6, "1,1": 7 };
+
+  // Seabed: light water over sand ripples and pebbles, on a fixed pseudo-random scatter.
+  const meadow = document.createElement("canvas");
+  meadow.width = W; meadow.height = PLAY_H;
+  (() => {
+    const m = meadow.getContext("2d");
+    m.fillStyle = C[0]; m.fillRect(0, 0, W, PLAY_H);
+    let s = 12345;
+    const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const ripple = (x, y) => { m.fillStyle = C[1]; [[0,1],[1,0],[2,0],[3,1],[4,1],[5,0]].forEach(([a, b]) => m.fillRect(x + a, y + b, 1, 1)); };
+    for (let by = 0; by < PLAY_H; by += 16) for (let bx = 0; bx < W; bx += 16) {
+      if (rnd() < 0.5) ripple(bx + 1 + (rnd() * 4 | 0), by + 3 + (rnd() * 3 | 0));
+      if (rnd() < 0.4) ripple(bx + 6 + (rnd() * 4 | 0), by + 10 + (rnd() * 3 | 0));
+      if (rnd() < 0.2) { m.fillStyle = C[2]; m.fillRect(bx + (rnd() * 14 | 0), by + (rnd() * 14 | 0), 2, 1); }
+    }
+  })();
+
+  // ---------- levels ----------
+  // 10 x 8 grid of 16 px squares. S start pump, P other pump, R rock, G gem, ~ a fish's row.
+  // fish: [row, speed]; positive speed starts at the left edge, negative at the right.
+  const LEVEL_DEFS = [
+    { name: "LEVEL 1", len: 160, fish: [], map: [
+      "........G.",
+      "....R.....",
+      "..........",
+      "S........G",
+      "..........",
+      "....R.....",
+      "........G.",
+      ".........."] },
+    { name: "LEVEL 2", len: 140, fish: [[2, 0.45]], map: [
+      "G.........",
+      "..R...R...",
+      "~~~~~~~~~~",
+      "....S.....",
+      "..........",
+      "..R...R...",
+      "..........",
+      "G........G"] },
+    { name: "LEVEL 3", len: 120, fish: [[4, 0.5]], map: [
+      "....R....G",
+      "..........",
+      "..R....R..",
+      "S.....P...",
+      "~~~~~~~~~~",
+      "....R.....",
+      "G.......R.",
+      ".....G...G"] },
+    { name: "LEVEL 4", len: 110, fish: [[2, 0.5], [5, -0.55]], map: [
+      "G.........",
+      "..R..P.R..",
+      "~~~~~~~~~~",
+      "....R....G",
+      "S.....R...",
+      "~~~~~~~~~~",
+      "..R.....P.",
+      "G....R...G"] },
+    { name: "LEVEL 5", len: 100, fish: [[2, 0.55], [2, -0.6], [5, 0.6]], map: [
+      "G.R....R.G",
+      "....P...R.",
+      "~~~~~~~~~~",
+      ".R..R..R..",
+      "S.........",
+      "~~~~~~~~~~",
+      "..R...G.P.",
+      "G...R....G"] },
+  ];
+  const LEVELS = LEVEL_DEFS.map(d => {
+    const pumps = [], rocks = [], gems = [];
+    d.map.forEach((row, r) => [...row].forEach((ch, c) => {
+      const x = c * 16, y = r * 16;
+      if (ch === "S") pumps.unshift([x, y]);
+      else if (ch === "P") pumps.push([x, y]);
+      else if (ch === "R") rocks.push([x, y]);
+      else if (ch === "G") gems.push([x + 4, y + 4]);
+    }));
+    return { name: d.name, len: d.len, hp: 3, pumps, rocks, gems,
+      start: [pumps[0][0] + 18, pumps[0][1]],                     // set down just right of the start pump
+      fish: d.fish.map(([row, v]) => [v > 0 ? 0 : W - 12, row * 16 + 4, v]) };
+  });
+
+  // ---------- tuning (all "adjust later") ----------
+  const AIR_MAX = 100;        // full tank at level start
+  const REEL_SPEED = 2;       // px of hose reeled in per frame when switching pumps
+  const REEL_DRAIN = 4;       // air per second while the hose is reeling in
+  const HOLE_DRAIN = 1;       // air per second per hole
+  const BITE_COOLDOWN = 60;   // frames after letting go before the same fish can bite again
+  const SPOT_DIST = 4;        // fish stops when its mouth is this close to the hose (px)
+  const WINDUP = 18;          // pause before the jump (0.3 s)
+  const JUMP_FRAMES = 2;      // the jump onto the hose takes 2 frames
+  const HOLD_FRAMES = 120;    // fish hangs on to the hose for 2 s
+  const FLAP_FRAMES = 15;     // tail frame swap: every 15 frames = 2 flaps per second
+  const GRIP_DIST = 3;        // lets go early if the hose moves further than this from its mouth
+  const BREATH_EVERY = 180;   // frames between breathing bubbles (3 s)
+  const GLIMMER_EVERY = 300;  // each gem glimmers every 5 s, gems take turns
+  const GLIMMER_LEN = 24;     // glimmer lasts 0.4 s (4 frames of 6)
+  const HOOK_SPEED = 3;       // hook line moving up / down, px per frame
+  const LOWER_SPEED = 1;      // diver lowered in / lifted out, px per frame
+
+  // ---------- state ----------
+  let air, hp, holes, fish, dead, flash;
+  // phase: "intro" (lowered in on the hook), "play", "outro" (reel in, hook down, lifted out),
+  // "done" (level clear), "dead" (out of air). sub/pt: step and timer inside a phase.
+  let phase, sub, pt, hookY, hoseOn, msgT, startX, startY, liftX;
+  let lv, L, pegs, pumps, pump, visited, reel, bubbles, gems, hx, hy, dir, step, animT, subX, subY, chain, fixedLen, frame, cleared, showReach = false;
+  let inX = 0, inY = 0;
+  const lenInput = document.getElementById("len"), lenOut = document.getElementById("len-out");
+
+  const attach = (x, y) => ({ x: x + 8, y: y + 12 });   // where the line meets the hero (his belt)
+  const cross = (ax, ay, bx, by) => ax * by - ay * bx;
+  const sgn = v => (v > 0) - (v < 0);
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const last = () => chain[chain.length - 1];
+
+  function load(i) {
+    lv = (i + LEVELS.length) % LEVELS.length;
+    const d = LEVELS[lv];
+    L = d.len; lenInput.value = L; lenOut.textContent = L;
+    pegs = d.rocks.map(([x, y]) => ({ x, y, cx: x + 8, cy: y + 8 }));
+    pumps = d.pumps.map(([x, y]) => ({ x, y, cx: x + 8, cy: y + 8 }));
+    gems = d.gems.map(([x, y]) => ({ x, y, got: false }));
+    reset();
+    document.getElementById("levelname").textContent = d.name;
+  }
+  function reset() {
+    const d = LEVELS[lv];
+    [startX, startY] = d.start; hx = startX; hy = -24;
+    dir = 4; step = 0; animT = 0; subX = 0; subY = 0; frame = 0; cleared = false;
+    phase = "intro"; sub = "lower"; pt = 0; hookY = hy + 4; hoseOn = false; msgT = 0;
+    gems.forEach(gm => gm.got = false);
+    attachTo(0);
+    visited = new Set([0]); reel = null; bubbles = [];
+    air = AIR_MAX; hp = d.hp; holes = []; dead = false; flash = 0;
+    fish = d.fish.map(([x, y, v]) => ({ x, y, v, cd: 0, st: "swim", t: 0, jx: 0, jy: 0 }));
+  }
+  // Start a fresh hose from pump i.
+  function attachTo(i) {
+    pump = i;
+    chain = [{ x: pumps[i].cx, y: pumps[i].cy, side: 0, peg: -1 }];
+    fixedLen = 0;
+  }
+  // Diver touched another pump: the hose comes off the old pump and reels in to the diver.
+  // He holds still and breathes from his tank meanwhile; when it's all in, it attaches to the new pump.
+  function switchPump(i) {
+    reel = { pts: chain.map(p => ({ x: p.x, y: p.y })), eaten: 0, to: i, free: false };
+  }
+  // Back at the start pump with every gem: reel the hose in (no air cost), then the hook comes for him.
+  function startOutro() {
+    phase = "outro"; sub = "reel"; pt = 0; msgT = 0;
+    reel = { pts: chain.map(p => ({ x: p.x, y: p.y })), eaten: 0, to: -1, free: true };
+  }
+  function recomputeFixed() {
+    fixedLen = 0;
+    for (let i = 1; i < chain.length; i++) fixedLen += dist(chain[i - 1], chain[i]);
+  }
+
+  // Solid boxes: rocks and pumps, inset 1 px. Hero collides with his feet only.
+  function blocked(x, y) {
+    const fx0 = x + 4, fx1 = x + 11, fy0 = y + 10, fy1 = y + 15;
+    const hit = o => fx1 >= o.x + 1 && fx0 <= o.x + 14 && fy1 >= o.y + 1 && fy0 <= o.y + 14;
+    return pumps.some(hit) || pegs.some(hit);
+  }
+
+  // The line bends at posts it swings across, and straightens when the hero comes back around.
+  function updateChain(H0, H1) {
+    let changed = false;
+    while (chain.length > 1) {                       // unwrap
+      const Cp = chain[chain.length - 1], Pp = chain[chain.length - 2];
+      if (sgn(cross(Cp.x - Pp.x, Cp.y - Pp.y, H1.x - Cp.x, H1.y - Cp.y)) === -Cp.side) { chain.pop(); changed = true; }
+      else break;
+    }
+    // Just came free: the old hero position was on the bent line, so it can't be used to
+    // test for a new catch this step (it would catch the same post again at once).
+    if (changed) { recomputeFixed(); return; }
+    const P = last();
+    let best = null, bestAng = Infinity;
+    pegs.forEach((pg, i) => {                        // wrap
+      const cx = pg.cx - P.x, cy = pg.cy - P.y;
+      if (cx === 0 && cy === 0) return;
+      const ax = H0.x - P.x, ay = H0.y - P.y, bx = H1.x - P.x, by = H1.y - P.y;
+      const c0 = cross(ax, ay, cx, cy), c1 = cross(bx, by, cx, cy);
+      if (c0 === 0 || sgn(c1) === sgn(c0)) return;   // line didn't swing across the post
+      if (cx * ax + cy * ay <= 0 && cx * bx + cy * by <= 0) return;   // post is behind the pivot
+      const ex = H1.x - H0.x, ey = H1.y - H0.y;
+      const e = cross(ex, ey, pg.cx - H0.x, pg.cy - H0.y), ep = cross(ex, ey, P.x - H0.x, P.y - H0.y);
+      if (e !== 0 && sgn(e) !== sgn(ep)) return;     // post is beyond the hero
+      const ang = Math.abs(Math.atan2(c0, ax * cx + ay * cy));
+      if (ang < bestAng) { bestAng = ang; best = { pg, i, c0, c1 }; }
+    });
+    if (best) {
+      const side = best.c1 !== 0 ? -sgn(best.c1) : sgn(best.c0);
+      chain.push({ x: best.pg.cx, y: best.pg.cy, side, peg: best.i });
+      changed = true;
+    }
+    if (changed) recomputeFixed();
+  }
+
+  // One pixel step on one axis, respecting walls, screen edges and line length.
+  function tryMove(nx, ny) {
+    if (nx < 0 || nx > W - 16 || ny < 0 || ny > PLAY_H - 16) return false;
+    if (blocked(nx, ny)) return false;
+    const H0 = attach(hx, hy), H1 = attach(nx, ny), P = last();
+    const dNew = dist(H1, P), dOld = dist(H0, P);
+    if (fixedLen + dNew > L && dNew > dOld) return false;   // at full length: only toward the line
+    hx = nx; hy = ny;
+    updateChain(H0, H1);
+    return true;
+  }
+
+  function update() {
+    frame++; pt++;
+    const playing = phase === "play";
+    const busy = !playing || reel;
+    const dx = busy ? 0 : inX, dy = busy ? 0 : inY;
+    if (dx || dy) {
+      dir = DIRS[dx + "," + dy];
+      if (++animT >= 12) { animT = 0; step = (step + 1) & 3; }
+    } else { step = 0; animT = 11; }
+    const sp = dx && dy ? Math.SQRT1_2 : 1;          // diagonal compensated, as in the game
+    subX = dx ? subX + sp : 0; subY = dy ? subY + sp : 0;
+    while (subY >= 1) { subY -= 1; tryMove(hx, hy + dy); }
+    while (subX >= 1) { subX -= 1; tryMove(hx + dx, hy); }
+    const fx0 = hx + 4, fx1 = hx + 11, fy0 = hy + 6, fy1 = hy + 15;
+
+    if (playing) {
+      gems.forEach(gm => { if (!gm.got && fx1 >= gm.x && fx0 <= gm.x + 7 && fy1 >= gm.y && fy0 <= gm.y + 7) gm.got = true; });
+      if (!cleared && gems.every(gm => gm.got)) { cleared = true; msgT = 180; }   // "now return to the start pump"
+      // Touching a pump (feet within 3 px of its housing): another pump = switch the hose to it;
+      // the start pump once every gem is collected = level done.
+      if (!reel) pumps.forEach((pm, i) => {
+        if (phase !== "play" || !(fx1 >= pm.x - 3 && fx0 <= pm.x + 18 && hy + 15 >= pm.y - 3 && hy + 10 <= pm.y + 18)) return;
+        if (i === 0 && cleared) startOutro();
+        else if (i !== pump) switchPump(i);
+      });
+    }
+    if (msgT > 0) msgT--;
+
+    if (reel) {
+      reel.eaten += REEL_SPEED;
+      if (!reel.free) air -= REEL_DRAIN / 60;
+      if (reel.eaten >= polyLen(reelPts())) {
+        if (reel.to >= 0) { attachTo(reel.to); visited.add(reel.to); } else hoseOn = false;
+        reel = null;
+      }
+    }
+    if (playing) {
+      air -= holes.length * HOLE_DRAIN / 60;
+      if (air <= 0) { air = 0; dead = true; phase = "dead"; pt = 0; reel = null; }
+    }
+    if (flash > 0) flash--;
+
+    // ---- intro: lowered in on the hook, set down, hook pulled up, hose clicks onto the start pump
+    if (phase === "intro") {
+      if (sub === "lower") {
+        hy += LOWER_SPEED;
+        hx = startX + [0, 1, 1, 0, 0, -1, -1, 0][(pt >> 3) & 7];   // gentle sway on the line
+        hookY = hy + 4;
+        if (hy >= startY) { hy = startY; hx = startX; sub = "hookup"; pt = 0; }
+      } else if (sub === "hookup") {
+        if (pt > 20) hookY -= HOOK_SPEED;                           // short pause, then the hook leaves
+        if (hookY < -10) { hoseOn = true; attachTo(0); flash = 0; phase = "play"; sub = ""; pt = 0; dir = 0; }
+      }
+    }
+    // ---- outro: reel in, hook comes down, diver lifted out, level clear
+    if (phase === "outro") {
+      if (sub === "reel" && !reel) { sub = "hookdown"; pt = 0; hookY = -10; dir = 4; }
+      else if (sub === "hookdown") { hookY += HOOK_SPEED; if (hookY >= hy + 4) { hookY = hy + 4; sub = "pause"; pt = 0; } }
+      else if (sub === "pause") { if (pt > 20) { sub = "lift"; pt = 0; liftX = hx; } }
+      else if (sub === "lift") {
+        hy -= LOWER_SPEED; hookY = hy + 4;
+        hx = liftX + [0, 1, 1, 0, 0, -1, -1, 0][(pt >> 3) & 7];   // same sway as on the way down
+        if (hy < -26) { phase = "done"; pt = 0; }
+      }
+    }
+    // ---- done: show "level clear", then the next level
+    if (phase === "done" && pt === 150 && lv < LEVELS.length - 1) load(lv + 1);
+    // ---- dead: burst of bubbles from the helmet, then stillness
+    if (phase === "dead" && pt <= 32 && pt % 4 === 0) {
+      bubbles.push({ x: hx + 4 + Math.random() * 8, y: hy + 6, t: 0, v: 0.6 + Math.random() * 0.4, life: 200, wob: 6,
+                     drift: (Math.random() - 0.5) * 0.5, big: true });
+    }
+
+    // Fish: swim -> stop 4 px from the hose -> pause 0.3 s -> jump onto it (bite) -> hold 2 s
+    // flapping its tail -> turn and swim away. Only bites during play.
+    const canBite = playing && hoseOn && !reel;
+    fish.forEach(f => {
+      const mouth = () => ({ x: f.v < 0 ? f.x : f.x + 11, y: f.y + 3 });
+      const near = () => { const pts = hosePts(), c = closestOnHose(pts, mouth()); return { pts, d: c.d, q: pointAt(pts, c.s) }; };
+      if (f.st === "swim") {
+        f.x += f.v;
+        if (f.x <= 0) { f.x = 0; f.v = Math.abs(f.v); }
+        if (f.x >= W - 12) { f.x = W - 12; f.v = -Math.abs(f.v); }
+        if (f.cd > 0) { f.cd--; return; }
+        if (!canBite) return;
+        const n = near(), m = mouth();
+        if (n.d <= SPOT_DIST && (n.q.x - m.x) * Math.sign(f.v) >= -1) { f.st = "stop"; f.t = 0; }   // hose ahead
+      } else if (f.st === "stop") {
+        if (!canBite) { f.st = "swim"; return; }
+        if (++f.t >= WINDUP) {
+          const n = near(), m = mouth();
+          if (n.d > SPOT_DIST + 2) { f.st = "swim"; return; }   // hose moved away: swim on
+          f.jx = (n.q.x - m.x) / JUMP_FRAMES; f.jy = (n.q.y - m.y) / JUMP_FRAMES;
+          f.st = "jump"; f.t = 0;
+        }
+      } else if (f.st === "jump") {
+        f.x += f.jx; f.y = Math.max(0, Math.min(PLAY_H - 8, f.y + f.jy));
+        if (++f.t >= JUMP_FRAMES) { if (canBite) bite(hosePts(), mouth()); f.st = "hold"; f.t = 0; }   // damage on landing
+      } else if (f.st === "hold") {
+        f.t++;
+        if (f.t >= HOLD_FRAMES || !canBite || near().d > GRIP_DIST) { f.st = "swim"; f.v = -f.v; f.cd = BITE_COOLDOWN; }
+      }
+    });
+    // Leaking holes send up bubbles from where they are on the hose (from the diver while reeling).
+    if (playing) holes.forEach((h, k) => {
+      if ((frame + k * 7) % 18 === 0) { const q = reel ? attach(hx, hy) : pointAt(hosePts(), h.s); bubbles.push({ x: q.x, y: q.y, t: 0, v: 0.5, life: 70, wob: 8 }); }
+    });
+
+    // Breathing: one calm, slow bubble every 3 s (not a warning, so low key).
+    if (phase !== "dead" && hy > 0 && frame % BREATH_EVERY === 0) bubbles.push({ x: hx + 8, y: hy + 1, t: 0, v: 0.25, life: 120, wob: 16 });
+    bubbles.forEach(b => { b.t++; b.y -= b.v; b.x += (b.drift || 0) + (((b.t / b.wob | 0) & 1) ? 0.25 / (b.wob / 8) : -0.25 / (b.wob / 8)); });
+    bubbles = bubbles.filter(b => b.t < b.life && b.y > -4);
+  }
+  function bite(pts, mouth) {
+    flash = 30;
+    if (hp > 0) hp--;
+    else holes.push({ s: closestOnHose(pts, mouth).s });   // hose is worn through: new hole
+  }
+  // Hose as a polyline: pump, caught rocks, diver.
+  function hosePts() { return [...chain, attach(hx, hy)]; }
+  // Distance from p to the hose, and how far along the hose (from the pump) the nearest point is.
+  function closestOnHose(pts, p) {
+    let best = { d: Infinity, s: 0 }, run = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], vx = b.x - a.x, vy = b.y - a.y, l2 = vx * vx + vy * vy, l = Math.sqrt(l2);
+      const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / l2)) : 0;
+      const d = Math.hypot(a.x + vx * t - p.x, a.y + vy * t - p.y);
+      if (d < best.d) best = { d, s: run + t * l };
+      run += l;
+    }
+    return best;
+  }
+  function pointAt(pts, s) {
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], l = dist(a, b);
+      if (s <= l) { const t = l ? s / l : 0; return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
+      s -= l;
+    }
+    return pts[pts.length - 1];
+  }
+  // Old hose while reeling in: its pumps/rocks path, ending at the diver as he moves.
+  function reelPts() { return [...reel.pts, attach(hx, hy)]; }
+  function polyLen(pts) { let l = 0; for (let i = 1; i < pts.length; i++) l += dist(pts[i - 1], pts[i]); return l; }
+
+  // ---------- drawing ----------
+  function px(x, y, c) { g.fillStyle = c; g.fillRect(x, y, 1, 1); }
+  function line(x0, y0, x1, y1, c) {               // Bresenham, 1 px, as the Game Boy will draw it
+    x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    g.fillStyle = c;
+    for (;;) {
+      g.fillRect(x0, y0, 1, 1);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+  }
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function render() {
+    g.drawImage(meadow, 0, 0);
+    const Hn = attach(hx, hy), P = last();
+    const used = reel ? Math.max(0, polyLen(reelPts()) - reel.eaten) : fixedLen + dist(Hn, P);
+    const taut = !reel && used >= L - 0.75;
+
+    if (showReach && !reel) {                                 // where the hero can still go from the last pivot
+      const r = Math.max(0, L - fixedLen);
+      for (let a = 0; a < 360; a += 3) {
+        const t = a * Math.PI / 180, x = Math.round(P.x + r * Math.cos(t)), y = Math.round(P.y + r * Math.sin(t));
+        if (y < PLAY_H && (a / 3) % 2 === 0) px(x, y, C[1]);
+      }
+    }
+
+    // Gems glimmer every 5 s, taking turns (gem i is offset by i/n of the period).
+    gems.forEach((gm, i) => {
+      if (gm.got) return;
+      g.drawImage(SPR_GEM, gm.x, gm.y);
+      const local = (frame + GLIMMER_EVERY - Math.floor(i * GLIMMER_EVERY / gems.length)) % GLIMMER_EVERY;
+      if (local < GLIMMER_LEN) sparkle(gm.x + 2, gm.y + 2, [1, 2, 3, 2][local / 6 | 0]);
+    });
+
+    const blink = reduceMotion || (frame >> 2) & 1;
+    const lineCol = flash ? (blink ? C[3] : C[1]) : taut ? (((frame >> 3) & 1) || reduceMotion ? C[3] : C[2]) : C[2];
+    if (!reel && hoseOn) {
+      for (let i = 1; i < chain.length; i++) line(chain[i - 1].x, chain[i - 1].y, chain[i].x, chain[i].y, lineCol);
+      line(P.x, P.y, Hn.x, Hn.y, lineCol);
+      holes.forEach(h => { const q = pointAt(hosePts(), h.s); g.fillStyle = C[3]; g.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 1, 3, 3); g.fillStyle = C[0]; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); });
+    }
+
+    if (reel) {                                      // old hose shrinking from the pump end
+      const pts = reelPts(); let skip = reel.eaten;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i], l = dist(a, b);
+        if (skip >= l) { skip -= l; continue; }
+        const t = skip / l; skip = 0;
+        line(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, b.x, b.y, C[2]);
+      }
+    }
+
+    pegs.forEach(pg => g.drawImage(SPR_ROCK, pg.x, pg.y));
+    pumps.forEach((pm, i) => g.drawImage(i === pump && hoseOn ? ((frame >> 4) & 1 && !reduceMotion ? SPR_PUMP_ON2 : SPR_PUMP_ON) : SPR_PUMP_OFF, pm.x, pm.y));
+    if (cleared && phase === "play") {                // arrow over the start pump: swim back here
+      const pm = pumps[0], bob = reduceMotion ? 0 : ((frame >> 4) & 1);
+      const ay = pm.y >= 8 ? pm.y - 7 + bob : pm.y + 18 - bob, up = pm.y < 8;
+      g.fillStyle = C[3];
+      for (let r = 0; r < 3; r++) g.fillRect(pm.cx - 2 + r, up ? ay + 2 - r : ay + r, 5 - r * 2, 1);
+    }
+    fish.forEach(f => {
+      const flap = f.st === "hold" && ((f.t / FLAP_FRAMES | 0) & 1);
+      g.drawImage(f.v < 0 ? (flap ? SPR_FISH_L2 : SPR_FISH_L) : (flap ? SPR_FISH_R2 : SPR_FISH_R), Math.round(f.x), Math.round(f.y));
+    });
+    if (showReach && !reel) chain.forEach((p, i) => { if (i > 0) { g.fillStyle = C[3]; g.fillRect(p.x - 1, p.y - 1, 3, 3); g.fillStyle = C[0]; g.fillRect(p.x, p.y, 1, 1); } });
+
+    const onHook = phase === "intro" || (phase === "outro" && sub !== "reel");
+    if (onHook) {                                    // line from the top of the screen down to the hook
+      const kx = hx + 8, ky = Math.round(hookY);
+      if (ky > 0) line(kx, 0, kx, ky, C[3]);
+      g.fillStyle = C[3];
+      [[0, 0], [0, 1], [0, 2], [1, 3], [2, 3], [3, 2], [3, 1]].forEach(([a, b]) => g.fillRect(kx + a, ky + b, 1, 1));
+    }
+    if (phase === "dead" && lying) g.drawImage(lying, hx, hy + 2);
+    else if (hero.complete && hero.naturalWidth) g.drawImage(hero, step * 16, dir * 16, 16, 16, hx, hy, 16, 16);
+    else { g.fillStyle = C[3]; g.fillRect(hx + 4, hy + 2, 8, 13); }
+    bubbles.forEach(b => {
+      const x = Math.round(b.x), y = Math.round(b.y), big = b.big || b.t > 25;
+      g.fillStyle = C[2];
+      if (b.big && b.t > 12) { g.fillRect(x - 1, y - 3, 3, 1); g.fillRect(x - 1, y + 2, 3, 1); g.fillRect(x - 3, y - 1, 1, 3); g.fillRect(x + 2, y - 1, 1, 3); g.fillRect(x - 2, y - 2, 1, 1); g.fillRect(x + 1, y - 2, 1, 1); g.fillRect(x - 2, y + 1, 1, 1); g.fillRect(x + 1, y + 1, 1, 1); }
+      else if (big) { g.fillRect(x - 1, y - 2, 2, 1); g.fillRect(x - 1, y + 1, 2, 1); g.fillRect(x - 2, y - 1, 1, 2); g.fillRect(x + 1, y - 1, 1, 2); }
+      else g.fillRect(x, y, 1, 1);
+    });
+
+    // HUD row (the Game Boy window layer): air | hose left | hose HP pips | gems
+    g.fillStyle = C[3]; g.fillRect(0, PLAY_H, W, 8);
+    g.fillStyle = C[2]; g.fillRect(3, PLAY_H + 1, 60, 6);
+    const lowAir = air < 25 && !dead;
+    g.fillStyle = lowAir && ((frame >> 3) & 1) && !reduceMotion ? C[1] : C[0];
+    g.fillRect(3, PLAY_H + 1, Math.round(60 * air / AIR_MAX), 6);
+    g.fillStyle = C[2]; g.fillRect(68, PLAY_H + 3, 40, 2);
+    const rem = Math.max(0, Math.min(1, 1 - used / L));
+    g.fillStyle = taut ? C[1] : C[0]; g.fillRect(68, PLAY_H + 3, Math.round(40 * rem), 2);
+    for (let i = 0; i < LEVELS[lv].hp; i++) { g.fillStyle = i < hp ? C[0] : C[2]; g.fillRect(113 + i * 4, PLAY_H + 2, 3, 4); }
+    gems.forEach((gm, i) => {
+      const x = W - 8 - i * 8;
+      g.fillStyle = gm.got ? C[0] : C[2];
+      g.fillRect(x + 2, PLAY_H + 1, 2, 1); g.fillRect(x + 1, PLAY_H + 2, 4, 3); g.fillRect(x + 2, PLAY_H + 5, 2, 1);
+    });
+
+    if (phase === "dead" && pt > 120) banner(["OUT OF AIR", "RESET = RETRY"]);
+    else if (phase === "done") banner(lv < LEVELS.length - 1 ? ["LEVEL CLEAR!"] : ["ALL LEVELS CLEAR!", "WELL DONE, DIVER"]);
+    else if (msgT > 0 && phase === "play") banner(["WELL DONE!", "NOW RETURN TO", "THE START PUMP"], 6);
+
+    setText("r-len", Math.round(used)); setText("r-max", L);
+    setText("r-air", Math.ceil(air));
+    setText("r-hp", hp + "/" + LEVELS[lv].hp + (holes.length ? ", " + holes.length + (holes.length > 1 ? " HOLES" : " HOLE") : ""));
+    setText("r-gems", gems.filter(gm => gm.got).length + "/" + gems.length);
+  }
+  function banner(lines, top) {
+    const h = lines.length * 9 + 7, y = top === undefined ? Math.round((PLAY_H - h) / 2) : top;
+    g.fillStyle = C[3]; g.fillRect(20, y, 120, h);
+    g.fillStyle = C[0]; g.fillRect(21, y + 1, 118, h - 2);
+    g.fillStyle = C[3]; g.font = "8px Silkscreen, monospace"; g.textAlign = "center"; g.textBaseline = "middle";
+    lines.forEach((t, i) => g.fillText(t, 80, y + 8 + i * 9));
+  }
+  // Glimmer: a small star that grows and shrinks (size 1-3) over the gem.
+  function sparkle(x, y, n) {
+    g.fillStyle = C[0]; g.fillRect(x, y, 1, 1);
+    g.fillStyle = n > 1 ? C[0] : C[1];
+    for (let k = 1; k <= n; k++) {
+      g.fillStyle = k === n ? C[3] : C[0];
+      g.fillRect(x - k, y, 1, 1); g.fillRect(x + k, y, 1, 1); g.fillRect(x, y - k, 1, 1); g.fillRect(x, y + k, 1, 1);
+    }
+  }
+  const shown = {};
+  function setText(id, v) { if (shown[id] !== v) { shown[id] = v; document.getElementById(id).textContent = v; } }
+
+  // ---------- input: touch d-pad, buttons, keyboard ----------
+  const pad = document.getElementById("dpad"), lit = document.getElementById("lit");
+  let padId = null, keyX = 0, keyY = 0, padX = 0, padY = 0;
+  function padFrom(e) {
+    const r = pad.getBoundingClientRect();
+    const x = e.clientX - (r.left + r.width / 2), y = e.clientY - (r.top + r.height / 2);
+    if (Math.hypot(x, y) < r.width * 0.12) { padX = padY = 0; }
+    else {
+      const oct = Math.round(Math.atan2(y, x) / (Math.PI / 4));   // 8 sectors
+      const t = oct * Math.PI / 4;
+      padX = Math.round(Math.cos(t)); padY = Math.round(Math.sin(t));
+    }
+    syncInput();
+  }
+  function syncInput() {
+    inX = padX || keyX; inY = padY || keyY;
+    if (padX || padY) {
+      lit.hidden = false;
+      lit.style.left = (44 + padX * 44) + "px"; lit.style.top = (44 + padY * 44) + "px";
+    } else lit.hidden = true;
+  }
+  pad.addEventListener("pointerdown", e => { e.preventDefault(); padId = e.pointerId; pad.setPointerCapture(padId); padFrom(e); });
+  pad.addEventListener("pointermove", e => { if (e.pointerId === padId) padFrom(e); });
+  const padUp = e => { if (e.pointerId === padId) { padId = null; padX = padY = 0; syncInput(); } };
+  pad.addEventListener("pointerup", padUp); pad.addEventListener("pointercancel", padUp); pad.addEventListener("lostpointercapture", padUp);
+  pad.addEventListener("contextmenu", e => e.preventDefault());
+
+  function press(id, fn) {
+    const b = document.getElementById(id);
+    b.addEventListener("pointerdown", e => { e.preventDefault(); b.classList.add("down"); fn(); });
+    const up = () => b.classList.remove("down");
+    b.addEventListener("pointerup", up); b.addEventListener("pointerleave", up); b.addEventListener("pointercancel", up);
+    b.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } });
+  }
+  const toggleReach = () => {
+    showReach = !showReach;
+    const a = document.getElementById("btn-a");
+    a.classList.toggle("on", showReach); a.setAttribute("aria-pressed", String(showReach));
+  };
+  press("btn-b", reset); press("btn-start", reset);
+  press("btn-sel", () => load(lv + 1));
+  press("btn-a", toggleReach);
+
+  const held = new Set();
+  const KEYMAP = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1], a: [-1, 0], d: [1, 0], w: [0, -1], s: [0, 1] };
+  function syncKeys() {
+    keyX = 0; keyY = 0;
+    held.forEach(k => { keyX += KEYMAP[k][0]; keyY += KEYMAP[k][1]; });
+    keyX = Math.sign(keyX); keyY = Math.sign(keyY); syncInput();
+  }
+  addEventListener("keydown", e => {
+    if (e.target === lenInput) return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (KEYMAP[k]) { e.preventDefault(); held.add(k); syncKeys(); }
+    else if (k === "r") reset();
+    else if (k === "l") load(lv + 1);
+    else if (k === " " && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); toggleReach(); }
+  });
+  addEventListener("keyup", e => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; if (held.delete(k)) syncKeys(); });
+  addEventListener("blur", () => { held.clear(); padX = padY = 0; syncKeys(); });
+
+  lenInput.addEventListener("input", () => { L = +lenInput.value; lenOut.textContent = L; });
+
+  // ---------- fixed 60 Hz loop, like the Game Boy ----------
+  load(0);
+  let acc = 0, prev = performance.now();
+  function tick(t) {
+    acc += Math.min(t - prev, 100); prev = t;
+    while (acc >= 1000 / 60) { update(); acc -= 1000 / 60; }
+    render();
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+  window.__tether = { get state() { return { phase, sub, lv, fish: fish.map(f => f.st + "@" + Math.round(f.x) + "," + Math.round(f.y)), air, hp, holes: holes.length, dead, pump, reel: !!reel, hx, hy, chain: chain.map(p => [p.x, p.y]), fixedLen, L, cleared, gems: gems.map(g => g.got) }; }, setInput(x, y) { keyX = x; keyY = y; syncInput(); }, load, reset, drain() { air = 0; } };
+})();
+</script>
+</body></html>

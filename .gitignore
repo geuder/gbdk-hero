@@ -1,0 +1,14 @@
+# build intermediates
+*.map
+*.noi
+*.ihx
+*.lst
+*.o
+*.sym
+*.cdb
+*.adb
+src/*.asm
+# emulator save/state files
+*.sav
+*.state
+*.ss[0-9]

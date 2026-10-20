@@ -1,0 +1,1303 @@
+<title>Stealth Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one handheld console (the same shell as the Tether prototype), centred; screen on top,
+   D-pad and A/B below, SELECT/START pills under them, a short help strip under the console.
+   In landscape on a phone: D-pad left, screen centre, buttons right. Single deliberate look. */
+:root {
+  color-scheme: dark;
+  --page: #1c211e;          /* table the console lies on */
+  --shell: #d6d2c6;         /* console plastic */
+  --shell-edge: #b9b4a6;
+  --bezel: #4b4f5a;         /* screen surround */
+  --ink: #2a2b33;           /* printed labels on plastic */
+  --pad: #26262b;           /* d-pad and pills */
+  --btn: #9a2453;           /* A / B buttons */
+  --btn-press: #761a3f;
+  --led: #e0384a;
+  --muted: #9ea69f;         /* text on the page */
+  --lcd-0: #e0f8d0; --lcd-1: #88c070; --lcd-2: #346856; --lcd-3: #081820;
+  --f-pixel: "Silkscreen", "Courier New", monospace;
+  --f-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+}
+html, body { height: 100%; }
+body {
+  background: var(--page); color: var(--muted);
+  font-family: var(--f-body); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 10px;
+  box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.console {
+  width: min(100%, 400px);
+  background: var(--shell);
+  border-radius: 14px 14px 56px 14px;
+  box-shadow: inset 0 -4px 0 var(--shell-edge), 0 10px 30px rgba(0,0,0,.45);
+  padding: 14px 14px 20px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-areas: "screen screen" "pad buttons" "pills pills";
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+}
+.bezel {
+  grid-area: screen;
+  background: var(--bezel);
+  border-radius: 10px 10px 32px 10px;
+  padding: 10px 14px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bezel-top { display: flex; align-items: center; gap: 8px; font-family: var(--f-pixel); font-size: 10px; color: #b7bac4; letter-spacing: .08em; }
+.led { width: 7px; height: 7px; border-radius: 50%; background: var(--led); box-shadow: 0 0 6px var(--led); }
+.bezel-top .levelname { margin-left: auto; color: #dfe1e8; }
+canvas#screen {
+  display: block; width: 100%; max-width: 100%; aspect-ratio: 160 / 144;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  background: var(--lcd-0);
+  touch-action: none;
+}
+.dpad { grid-area: pad; position: relative; width: 132px; height: 132px; touch-action: none; cursor: pointer; align-self: center; }
+.dpad .arm { position: absolute; background: var(--pad); border-radius: 5px; box-shadow: 0 3px 0 #111114; }
+.dpad .h { left: 0; right: 0; top: 44px; height: 44px; }
+.dpad .v { top: 0; bottom: 0; left: 44px; width: 44px; }
+.dpad .hub { position: absolute; left: 56px; top: 56px; width: 20px; height: 20px; border-radius: 50%; background: #1a1a1e; }
+.dpad .lit { position: absolute; width: 44px; height: 44px; border-radius: 6px; background: rgba(255,255,255,.18); pointer-events: none; }
+.right { grid-area: buttons; display: flex; justify-content: flex-end; align-items: center; }
+.ab { display: flex; gap: 14px; transform: rotate(-20deg); margin-right: 4px; }
+.ab .wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ab .wrap:first-child { margin-top: 26px; }
+.round {
+  width: 58px; height: 58px; border-radius: 50%; border: 0;
+  background: var(--btn); box-shadow: 0 4px 0 var(--btn-press);
+  touch-action: none; cursor: pointer;
+}
+.round:active, .round.down { transform: translateY(3px); box-shadow: 0 1px 0 var(--btn-press); }
+.lbl { font-family: var(--f-pixel); font-size: 10px; color: var(--ink); letter-spacing: .08em; }
+.pills { grid-area: pills; display: flex; gap: 18px; justify-content: center; }
+.pill-wrap { display: flex; flex-direction: column; align-items: center; gap: 5px; transform: rotate(-20deg); }
+.pill {
+  width: 46px; height: 13px; border-radius: 7px; border: 0;
+  background: #77757a; box-shadow: 0 2px 0 #55535a; touch-action: none; cursor: pointer;
+}
+.pill:active, .pill.down { transform: translateY(2px); box-shadow: none; }
+button:focus-visible { outline: 2px solid #f6c945; outline-offset: 3px; }
+.help {
+  width: min(100%, 400px); box-sizing: border-box;
+  display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: center;
+  font-size: 12px; line-height: 1.4;
+}
+.help b { font-family: var(--f-pixel); font-weight: 400; font-size: 10px; color: #c9d0c9; }
+@media (orientation: landscape) and (max-height: 520px) {
+  body { justify-content: center; }
+  .console {
+    width: auto; height: calc(100% - 4px);
+    grid-template-areas: "pad screen buttons" "pad screen pills";
+    grid-template-columns: auto auto auto; grid-template-rows: 1fr auto;
+    align-items: center; border-radius: 14px 14px 40px 14px; padding: 10px 16px;
+  }
+  .bezel { height: 100%; box-sizing: border-box; justify-content: center; }
+  canvas#screen { height: calc(100% - 26px); width: auto; }
+  .help { display: none; }
+}
+</style>
+
+<main class="console" aria-label="Stealth prototype">
+  <div class="bezel">
+    <div class="bezel-top"><span class="led" aria-hidden="true"></span><span>STEALTH</span><span class="levelname" id="levelname">SELECT LEVEL</span></div>
+    <canvas id="screen" width="160" height="144" aria-label="Game screen"></canvas>
+  </div>
+  <div class="dpad" id="dpad" role="group" aria-label="Direction pad">
+    <div class="arm h"></div><div class="arm v"></div><div class="hub"></div>
+    <div class="lit" id="lit" hidden></div>
+  </div>
+  <div class="right">
+    <div class="ab">
+      <div class="wrap"><button class="round" id="btnB" aria-label="B: crouch in a bush"></button><span class="lbl">B CROUCH</span></div>
+      <div class="wrap"><button class="round" id="btnA" aria-label="A: action"></button><span class="lbl">A ACTION</span></div>
+    </div>
+  </div>
+  <div class="pills">
+    <div class="pill-wrap"><button class="pill" id="btnSelect" aria-label="Select: back to the level select"></button><span class="lbl">SELECT</span></div>
+    <div class="pill-wrap"><button class="pill" id="btnStart" aria-label="Start"></button><span class="lbl">START</span></div>
+  </div>
+</main>
+<section class="help">
+  <span><b>?</b> searching</span><span><b>!</b> attacking</span>
+  <span><b>A</b> knock out, or use your item</span><span>hold <b>A</b> 2 s: drop it</span>
+  <span>hold <b>A</b> by a body: drag; with the rope: tie up</span>
+  <span><b>B</b> in a bush: crouch</span><span><b>SELECT</b> back to the levels</span>
+</section>
+
+<script>
+"use strict";
+const levelName = document.getElementById("levelname");
+/* ------------------------------------------------------------------ data from the ROM */
+const SPR_B64 = "__SPR__";
+const BG_B64 = "__BG__";
+const HERO_ANIM = __ANIM__;
+
+/* ------------------------------------------------------------------ constants (as in src/main.c) */
+const W = 160, H = 144, CW = 20, CH = 18;
+const PLAYER_SPEED = 0.75, PATROL_SPEED = 0.5, SEARCH_SPEED = 0.625, ATTACK_SPEED = 1.0;
+const TURN_RATE = 3, SPOT_FRAMES = 135, SEARCH_FRAMES = 480, SEARCH_RANGE = 3;
+const CONE_LEN = 60, CONE_DEG = 30, CONE_ANGLES = 256;  // cone: 60 px long (the ROM has 20), any of 256 facings
+const LOOK_SWAY = 10 * 256 / 360, SWAY_FRAMES = 150;     // patrol looks -10..+10 degrees, one sweep per 2.5 s
+const PLAY_H = 136;                                      // bottom 8 px row is the item bar
+const KO_FRAMES = 20 * 60, DROP_LOCK = 4 * 60;           // knocked out for 20 s; a dropped item can't be picked up for 4 s
+const TOUCH_X = 8, TOUCH_Y = 6;                          // feet this close = bumping into the NPC
+const DROP_HOLD = 2 * 60;                                // hold A this long, then release: drop the item
+const SHURIKEN_SPEED = 3, TOSS_RANGE = 40, AIM_SPEED = 1; // px per frame / max toss distance / cross speed
+const STONE_RADIUS = 50, STONE_LOOK = 4 * 60, STONE_PAUSE = 60;            // NPCs this close to a landed stone look at it for 4 s
+const COIN_WAIT = 60;                                    // NPC waits 1 s before and after picking up a coin
+const TIE_FRAMES = 4 * 60, DRAG_SPEED = 0.5;             // tying up takes 4 s; dragging a body is slower
+const CROUCH_SPEED = 0.5, VANISH_FRAMES = 45;            // crouching is slow; a tied body hidden in a bush fades away
+const REACH_X = 12, REACH_Y = 10;                        // close enough to a lying NPC to tie it or grab it
+
+const DIR_VEC = [[0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1]];   // sheet row -> direction
+/* items: 8 x 8 art, digits = shade, '.' = see-through */
+const ITEMS = {
+  shuriken: ["...3....", "...33...", "3.3223..", ".32..233", "332..23.", "..3223.3", "...33...", "....3..."],
+  rope:     ["..3333..", ".322223.", "32.33.23", "323..323", "323..323", "32.33.23", ".322223.", "..3333.3"],
+  trap:     ["........", "3.3.3.3.", "32323232", "32222223", "3.3333.3", "33....33", "23333332", "........"],
+  stone:    ["........", "........", "..333...", ".31123..", "3122223.", "3222223.", ".33333..", "........"],
+  coin:     ["..3333..", ".311113.", "31122113", "31211213", "31211213", "31122113", ".311113.", "..3333.."],
+};
+const ITEM_NAMES = Object.keys(ITEMS);
+const KILL_DIST = 9, TAKEDOWN_DIST = 12, LOOK_RADIUS = CONE_LEN;
+const SPIN = 256, TURN_BACK = 128;                        // route steps: spin all the way round / turn round
+const VR = Math.ceil(CONE_LEN / 8) + 1;                  // visibility window: +-VR cells around the eye
+const LIE_DROP = 4;                                       // the lying figure is drawn this much lower than the standing one
+const T_LYING = 96, T_QUESTION = 100, T_BANG = 102;
+const B_GROUND = 0, B_FLOOR = 3, B_WALL = 5, B_FONT = 6;
+const FONT_CHARS = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!,.-:";
+const NS_NORMAL = 0, NS_SUSPICIOUS = 1, NS_ATTACK = 2, NS_DOWN = 3, NS_COIN = 4;   // NS_COIN: going for a coin
+const G_TITLE = 0, G_PLAY = 1, G_DEAD = 2, G_CLEAR = 3;
+const ROW_FROM_OCT = [6, 7, 0, 1, 2, 3, 4, 5];
+const DIR_FROM = [[3, 4, 5], [2, 0, 6], [1, 0, 7]];
+
+/* ------------------------------------------------------------------ tiles */
+function decodeTiles(b64) {
+  const bin = atob(b64), tiles = [];
+  for (let t = 0; t < bin.length / 16; t++) {
+    const px = new Uint8Array(64);
+    for (let y = 0; y < 8; y++) {
+      const lo = bin.charCodeAt(t * 16 + y * 2), hi = bin.charCodeAt(t * 16 + y * 2 + 1);
+      for (let x = 0; x < 8; x++) px[y * 8 + x] = ((lo >> (7 - x)) & 1) | (((hi >> (7 - x)) & 1) << 1);
+    }
+    tiles.push(px);
+  }
+  return tiles;
+}
+const SPR = decodeTiles(SPR_B64), BG = decodeTiles(BG_B64);
+const PAL_PLAYER = [0, 0, 1, 3];   // OBP0 0xD0: the player, light
+const PAL_NPC = [0, 1, 2, 3];      // OBP1 0xE4: NPCs, one shade darker
+const PAL_GHOST = [0, 0, 1, 1];    // a body seen through dark leaves: light, so it reads
+
+/* ------------------------------------------------------------------ levels
+   map: 20 x 18 cells of 8 px (the last row is under the item bar).
+     .  ground   ,  floor inside   #  wall (blocks walking and seeing)   o  ravine (blocks walking only)
+   npcs: route NPCs walk a script of steps, repeating it:
+     { go: [x, y] }   walk there (feet position, px)
+     { turn: n }      turn clockwise on the spot by n (256 = all the way round, 128 = turn round)
+   guard NPCs stand at a post and sweep their view +- sweep around a facing.
+   facings: 0 east, 64 south, 128 west, 192 north. */
+/* Level 4's guard rotation: every guard runs this one loop, starting at a different step.
+   Posts A (G1) and B (G2) at the bottom, C (G4) and D (G5) at the top; the walker goes round the diamond.
+   { signal: s } bumps a pair; { wait: s } waits for the next bump; { free: [x, y] } waits until no one stands there;
+   { turnTo: a } turns the short way to a facing; { cw: a } / { ccw: a } turn clockwise / anticlockwise until facing a. */
+const RA = [73, 116], RB = [87, 116], RC = [73, 20], RD = [87, 20],   // 14 px apart: no way between without bumping into one
+      RP1 = [12, 68], RP2 = [148, 68];
+const ROTATION = [
+  { go: [96, 108] },  { signal: "low" },                   //  0: from P2 down to G2 and bump it
+  { free: RB }, { go: RB }, { turnTo: 128 },              //  2: take G2's post, face west
+  { wait: "low" },                                        //  5: on B
+  { free: RA }, { go: RA }, { cw: 0 },                    //  6: step over to G1's post, turn round clockwise to face east
+  { wait: "low" },                                        //  9: on A
+  { cw: 128 }, { go: RP1 }, { ccw: 224 },                 // 10: turn round clockwise, to P1, 270 anticlockwise to face G4
+  { go: [64, 28] }, { signal: "high" },                   // 13: up to G4 and bump it
+  { free: RC }, { go: RC }, { turnTo: 0 },                // 15: take G4's post, face east
+  { wait: "high" },                                       // 18: on C
+  { free: RD }, { go: RD }, { ccw: 128 },                 // 19: step over to G5's post, turn round anticlockwise to face west
+  { wait: "high" },                                       // 22: on D
+  { ccw: 0 }, { go: RP2 }, { ccw: 96 }];                  // 23: turn round anticlockwise, to P2, 270 anticlockwise to face G2
+const R_ON_B = 5, R_ON_A = 9, R_ON_C = 18, R_ON_D = 22;
+
+const LEVELS = [
+  { name: "FIRST STEPS",
+    map: [
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+    ],
+    spawn: [80, 126], exit: { x: 72, y: 0, w: 16, h: 10 },
+    bushes: [{ x: 4, y: 56, w: 24, h: 24 }],
+    items: [{ name: "stone", x: 100, y: 112 }],
+    npcs: [{ guard: [80, 52], face: 64, sweep: 40 }] },
+  { name: "DISTRACTION",
+    map: [
+      "....................",
+      "....................",
+      "....................",
+      "......########......",
+      "......########......",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+    ],
+    spawn: [12, 126], exit: { x: 140, y: 0, w: 20, h: 10 },
+    bushes: [{ x: 120, y: 92, w: 24, h: 24 }],
+    items: [{ name: "coin", x: 24, y: 108 }, { name: "stone", x: 44, y: 120 }],
+    npcs: [{ start: [20, 68], face: 0, route: [{ go: [140, 68] }, { turn: SPIN }, { go: [20, 68] }, { turn: SPIN }] }] },
+  { name: "THE RAVINE",                                 // from Patrick's sketch
+    map: [
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      ".....ooooooooooo....",
+      ".....ooooooooooo....",
+      ".....ooooooooooo....",
+      ".....ooooooooooo....",
+      ".....ooooooooooo....",
+      ".....ooooooooooo....",
+      ".....ooooooooooo....",
+      ".....ooooooooooo....",
+      ".....ooooooooooo....",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+    ],
+    spawn: [80, 126], exit: { x: 72, y: 0, w: 16, h: 10 },
+    bushes: [],
+    items: [{ name: "coin", x: 92, y: 120 },             // next to the spawn, and one in each corner
+            { name: "coin", x: 2, y: 2 }, { name: "coin", x: 150, y: 2 }, { name: "coin", x: 2, y: 126 }, { name: "coin", x: 150, y: 126 }],
+    npcs: [
+      { start: [20, 68], face: 192, route: [                // G1: the top half, left side first
+        { go: [20, 20] }, { turn: SPIN },                   // north to P1.1
+        { go: [140, 20] }, { turn: SPIN },                  // east to P1.2
+        { go: [140, 60] }, { turn: TURN_BACK },             // south to P1.3, turn round
+        { go: [140, 20] }, { turn: SPIN },                  // north to P1.2
+        { go: [20, 20] }, { turn: SPIN },                   // west to P1.1
+        { go: [20, 68] }, { turn: TURN_BACK }] },           // south to G1, turn round
+      { start: [140, 68], face: 64, route: [                // G2: the bottom half, right side first
+        { go: [140, 116] }, { turn: SPIN },                 // south to P2.1
+        { go: [20, 116] }, { turn: SPIN },                  // west to P2.2
+        { go: [20, 76] }, { turn: SPIN }, { turn: TURN_BACK }, // north to P2.3, spin, turn round
+        { go: [20, 116] }, { turn: SPIN },                  // south to P2.2
+        { go: [140, 116] }, { turn: SPIN },                 // east to P2.1
+        { go: [140, 68] }, { turn: TURN_BACK }] }]          // north to G2, turn round
+  },
+  { name: "GUARD ROTATION",                             // from Patrick's sketch: two facing pairs and a walker on a diamond
+    map: Array(18).fill("...................."),
+    spawn: [12, 126], exit: { x: 72, y: 0, w: 16, h: 10 },
+    bushes: [{ x: 68, y: 56, w: 24, h: 24 },              // the middle, and three corners (bottom-left is the spawn)
+             { x: 0, y: 0, w: 24, h: 24 }, { x: 136, y: 0, w: 24, h: 24 }, { x: 136, y: 112, w: 24, h: 24 }],
+    items: [{ name: "trap", x: 96, y: 64 }, { name: "rope", x: 56, y: 64 }],   // either side of the middle bush
+    npcs: [
+      { start: RA, face: 0,     route: ROTATION, ri: R_ON_A },   // G1: bottom pair, facing east
+      { start: RB, face: 128, route: ROTATION, ri: R_ON_B },   // G2: bottom pair, facing west
+      { start: RP2, face: 96,      route: ROTATION, ri: 0 },        // G3: walking from P2 to G2
+      { start: RC, face: 0,   route: ROTATION, ri: R_ON_C },   // G4: top pair, facing east
+      { start: RD, face: 128, route: ROTATION, ri: R_ON_D }] }, // G5: top pair, facing west
+  { name: "THE HOUSE",
+    map: [
+      "....................",
+      "....................",
+      "....................",
+      "....############....",
+      "....#,,,,#,,,,,#....",
+      "....#,,,,,,,,,,,....",
+      "....#,,,,,,,,,,,....",
+      "....#,,,,#,,,,,#....",
+      "....#,,,,###,,##....",
+      "....#,,,,#,,,,,#....",
+      "....,,,,,#,,,,,#....",
+      "....,,,,,,,,,,,#....",
+      "....#,,,,,,,,,,#....",
+      "....#,,,,#,,,,,#....",
+      "....#######,,###....",
+      "....................",
+      "....................",
+      "....................",
+    ],
+    spawn: [10, 131], exit: { x: 72, y: 0, w: 16, h: 10, locked: true },   // opens when a hostage follows you (later)
+    bushes: [{ x: 0, y: 0, w: 24, h: 24 }, { x: 136, y: 112, w: 24, h: 24 }],
+    items: "random", clearOnAllDown: true,
+    npcs: [
+      { start: [140, 12], face: 128, route: [{ go: [20, 12] }, { go: [20, 132] }, { go: [140, 132] }, { go: [140, 12] }] },   // round the house
+      { guard: [100, 52], face: 128, sweep: 40 }] },
+];
+
+/* ------------------------------------------------------------------ map (of the current level) */
+let signals = {};                                         // guard-rotation bumps sent so far, by name
+let level, levelNo = 0, solid = [], opaque = [], base = [], bushes = [];
+function buildMap(L) {
+  solid = []; opaque = []; base = [];
+  for (let y = 0; y < CH; y++) {
+    solid.push([]); opaque.push([]); base.push([]);
+    for (let x = 0; x < CW; x++) {
+      const c = L.map[y][x];
+      let t;
+      if (c === "#") t = B_WALL;
+      else if (c === ",") t = B_FLOOR + (y & 1);
+      else if (c === "o") t = -1;                       // ravine: drawn by pitTile()
+      else {
+        let h = (x * 37 + y * 101 + x * y * 13) & 255;
+        h ^= h >> 3;
+        t = B_GROUND + (h % 7 === 0 ? 0 : (h % 5 === 1 ? 1 : 2));
+      }
+      solid[y].push(c === "#" || c === "o"); opaque[y].push(c === "#"); base[y].push(t);
+    }
+  }
+}
+/* walking: walls, ravine and the screen edge stop you. seeing: only walls block the view. */
+const solidAt = (cx, cy) => cx < 0 || cy < 0 || cx >= CW || cy >= PLAY_H / 8 || solid[cy][cx];
+const solidPx = (x, y) => solidAt(x >> 3, y >> 3);
+const opaqueAt = (cx, cy) => cx < 0 || cy < 0 || cx >= CW || cy >= PLAY_H / 8 || opaque[cy][cx];
+const opaquePx = (x, y) => opaqueAt(x >> 3, y >> 3);
+
+/* ------------------------------------------------------------------ cone tables (as tools/make_gfx.py) */
+const CONES = [];   // built on first use, one per facing
+function cone(k) { return CONES[k] || (CONES[k] = buildCone(k)); }
+function buildCone(k) {
+  const th = 2 * Math.PI * k / CONE_ANGLES, rows = new Map();
+  for (let dy = -CONE_LEN; dy <= CONE_LEN; dy++)
+    for (let dx = -CONE_LEN; dx <= CONE_LEN; dx++) {
+      const d = Math.hypot(dx, dy);
+      if (d < 1 || d > CONE_LEN + 0.25) continue;
+      let a = (Math.atan2(dy, dx) - th) * 180 / Math.PI;
+      a = ((a + 180) % 360 + 360) % 360 - 180;
+      if (Math.abs(a) > CONE_DEG / 2 + 0.01) continue;
+      const r = rows.get(dy);
+      if (r) { r[0] = Math.min(r[0], dx); r[1] = Math.max(r[1], dx); } else rows.set(dy, [dx, dx]);
+    }
+  const dys = [...rows.keys()].sort((a, b) => a - b);
+  return { dy0: dys[0], rows: dys.map(dy => rows.get(dy)) };
+}
+const LOS = [];   // cells strictly between cell (0,0) and (dx,dy)
+for (let dy = -VR; dy <= VR; dy++)
+  for (let dx = -VR; dx <= VR; dx++) {
+    const cells = [];
+    for (let i = 1; i < 256; i++) {
+      const t = i / 256, c = [Math.floor(0.5 + dx * t + 1e-4), Math.floor(0.5 + dy * t + 2e-4)];
+      if ((c[0] || c[1]) && !(c[0] === dx && c[1] === dy) && !cells.some(e => e[0] === c[0] && e[1] === c[1])) cells.push(c);
+    }
+    LOS.push(cells);
+  }
+function cellVisible(ecx, ecy, cx, cy) {
+  const rx = cx - ecx, ry = cy - ecy;
+  if (rx < -VR || rx > VR || ry < -VR || ry > VR || opaqueAt(cx, cy)) return false;
+  for (const c of LOS[(ry + VR) * (2 * VR + 1) + rx + VR]) if (opaqueAt(ecx + c[0], ecy + c[1])) return false;
+  return true;
+}
+/* Is pixel (x, y) lit by the cone with eye (ex, ey), facing k? */
+function coneHas(ex, ey, k, x, y) {
+  const c = cone(k), i = y - ey - c.dy0;
+  if (i < 0 || i >= c.rows.length) return false;
+  const r = c.rows[i];
+  if (x < ex + r[0] || x > ex + r[1] || x < 0 || x >= W) return false;
+  return cellVisible(ex >> 3, ey >> 3, x >> 3, y >> 3);
+}
+
+/* ------------------------------------------------------------------ game state */
+let gstate = G_TITLE, frame = 0;
+let keys = 0, prevKeys = 0;            // bits: 1 up, 2 down, 4 left, 8 right, 16 A, 32 start, 64 B, 128 select
+let player, npcs, rng = 0xACE1;
+const rnd = () => { rng = (rng * 25173 + 13849) & 0xFFFF; return rng >> 8; };
+const angleOf = (dx, dy) => (Math.round(Math.atan2(dy, dx) / (2 * Math.PI) * 256) + 256) & 255;
+let banner = null;
+let held = null, items = [];   // held: item name or null; items on the map: { name, x, y (top left), lock, armed, claimed }
+let aHold = 0, aim = null, aimMoved = false;   // A held for frames; coin/stone aiming cross
+let tie = null, grabbed = null;   // tie: { npc, t } while tying with the rope; grabbed: { npc, ox, oy } while dragging a body
+let flying = [];               // shuriken: { name, x, y, dx, dy }; toss: { name, x0, y0, x1, y1, t, n }
+
+/* the level's items; "random": one of each on a random free cell, away from the start positions and each other */
+function placeItems() {
+  items = [];
+  if (level.items !== "random") { for (const it of level.items) items.push({ name: it.name, x: it.x, y: it.y, lock: 0 }); return; }
+  const avoid = [level.spawn, ...level.npcs.map(n => n.start || n.guard),
+                 ...bushes.map(b => [b.x + b.w / 2, b.y + b.h / 2])];   // (and not hidden under a bush)
+  for (const name of ITEM_NAMES) {
+    for (let tries = 0; tries < 500; tries++) {
+      const cx = Math.floor(Math.random() * CW), cy = Math.floor(Math.random() * (PLAY_H / 8));
+      if (solidAt(cx, cy)) continue;
+      const x = cx * 8, y = cy * 8, mx = x + 4, my = y + 4;
+      if (avoid.some(([ax, ay]) => Math.abs(ax - mx) < 24 && Math.abs(ay - my) < 24)) continue;
+      if (items.some(it => Math.abs(it.x - x) < 24 && Math.abs(it.y - y) < 24)) continue;
+      items.push({ name, x, y, lock: 0 });
+      break;
+    }
+  }
+}
+function dropHeld() {
+  if (!held) return;
+  items.push({ name: held, x: Math.floor(player.fx) - 4, y: Math.floor(player.fy) - 6, lock: DROP_LOCK });
+  held = null;
+}
+const inScreen = (x, y) => x >= 0 && x < W && y >= 0 && y < PLAY_H;
+/* where an item lands: its 8 x 8 box fully on screen */
+function landItem(name, cx, cy) {
+  const x = Math.max(0, Math.min(W - 8, Math.round(cx) - 4)), y = Math.max(0, Math.min(PLAY_H - 8, Math.round(cy) - 4));
+  const it = { name, x, y, lock: 0 };
+  items.push(it);
+  return it;
+}
+function knockOut(e) { e.state = NS_DOWN; e.seen = false; e.koT = KO_FRAMES; e.look = 0; e.distract = null; e.coin = null; }
+/* A was pressed and released (not a long hold) with an item: use it */
+function useItem() {
+  const p = player, [vx, vy] = DIR_VEC[p.dir], px = Math.floor(p.fx), py = Math.floor(p.fy);
+  if (held === "shuriken") {
+    const n = vx && vy ? 0.7071 : 1;
+    flying.push({ name: "shuriken", x: px, y: py - 6, dx: vx * n, dy: vy * n });
+    held = null;
+  } else if (held === "trap") {                         // set it in front of you, unless that's a wall
+    const tx = px + vx * 12, ty = py - 2 + vy * 12;
+    if (!inScreen(tx - 4, ty - 4) || !inScreen(tx + 3, ty + 3) || solidPx(tx - 4, ty - 4) || solidPx(tx + 3, ty - 4) ||
+        solidPx(tx - 4, ty + 3) || solidPx(tx + 3, ty + 3)) return;
+    landItem("trap", tx, ty).armed = true;
+    held = null;
+  }
+}
+/* coin / stone: start aiming with a cross */
+function startAim() {
+  const [vx, vy] = DIR_VEC[player.dir];
+  aim = { x: Math.floor(player.fx) + vx * 16, y: Math.floor(player.fy) - 6 + vy * 16 };
+  aimMoved = false;
+  clampAim();
+}
+function clampAim() {
+  const ox = Math.floor(player.fx), oy = Math.floor(player.fy) - 6;
+  let dx = aim.x - ox, dy = aim.y - oy, d = Math.hypot(dx, dy);
+  if (d > TOSS_RANGE) { aim.x = ox + dx * TOSS_RANGE / d; aim.y = oy + dy * TOSS_RANGE / d; }
+  aim.x = Math.max(4, Math.min(W - 5, aim.x)); aim.y = Math.max(4, Math.min(PLAY_H - 5, aim.y));   // just inside the edge
+}
+function toss() {
+  const x0 = Math.floor(player.fx), y0 = Math.floor(player.fy) - 6;
+  let x1 = Math.round(aim.x), y1 = Math.round(aim.y);
+  for (let i = 0; i < 64 && solidPx(x1, y1); i++) {     // landing in a wall: come back towards the player
+    x1 += Math.sign(x0 - x1); y1 += Math.sign(y0 - y1);
+  }
+  const d = Math.hypot(x1 - x0, y1 - y0);
+  flying.push({ name: held, x0, y0, x1, y1, t: 0, n: Math.max(12, Math.round(14 + d * 0.6)) });
+  held = null; aim = null;
+}
+/* the A button: tap with nothing held = knock out; with an item = use it; hold 2 s and release = drop it */
+const inBush = (x, y) => bushes.some(b => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+const playerInBush = () => inBush(player.fx, player.fy - 4);
+const bodyInBush = e => inBush(e.fx, e.fy - 6 + LIE_DROP);
+/* NPCs that are calm (normal duty, a coin errand, or looking at a stone) don't notice a crouching player */
+const calm = e => e.state === NS_NORMAL || e.state === NS_COIN;
+/* B in a bush: crouch / stand up. Leaving the bush stands you up. */
+function updateCrouch(pressed) {
+  if (!playerInBush()) { player.crouch = false; return; }
+  if (pressed & 64) player.crouch = !player.crouch;
+}
+/* a tied-up body left in a bush is gone for good: it fades out and leaves the game */
+function updateVanish() {
+  for (const e of [...npcs]) {
+    if (!(e.state === NS_DOWN && e.tied && bodyInBush(e)) || (grabbed && grabbed.npc === e)) { e.vanishT = 0; continue; }
+    if (++e.vanishT >= VANISH_FRAMES) npcs.splice(npcs.indexOf(e), 1);
+  }
+}
+/* a knocked-out NPC lying within reach of the player */
+function bodyInReach(untiedOnly) {
+  const px = Math.floor(player.fx), py = Math.floor(player.fy);
+  return npcs.find(e => e.state === NS_DOWN && !(untiedOnly && e.tied) &&
+                        Math.abs(e.fx - px) <= REACH_X && Math.abs(e.fy + LIE_DROP - py) <= REACH_Y);
+}
+/* rope: hold A for 4 s to tie. Done before the NPC wakes: it stays down for good and the rope is used up.
+   Too late: it wakes up and kills you. Let go early: you stop, and keep the rope. */
+function updateTie() {
+  if (!tie) return;
+  if (!(keys & 16)) { tie = null; return; }
+  if (--tie.t <= 0) { tie.npc.tied = true; tie.npc.koT = KO_FRAMES; tie = null; held = null; }
+}
+/* empty-handed, holding A next to a body: it moves along with you */
+function updateDrag() {
+  if (held || !(keys & 16) || tie) { grabbed = null; return; }
+  if (grabbed && grabbed.npc.state !== NS_DOWN) grabbed = null;
+  if (!grabbed) {
+    const e = bodyInReach(false);
+    if (e) grabbed = { npc: e, ox: e.fx - player.fx, oy: e.fy - player.fy };
+    return;
+  }
+  const e = grabbed.npc, tx = player.fx + grabbed.ox, ty = player.fy + grabbed.oy;
+  if (!feetBlocked(Math.floor(tx), Math.floor(e.fy))) e.fx = tx;   // walls stop the body, axis by axis
+  if (!feetBlocked(Math.floor(e.fx), Math.floor(ty))) e.fy = ty;
+}
+function handleA(pressed, released) {
+  if (pressed & 16) {
+    aHold = 0;
+    if (held === "rope") {                               // next to a knocked-out NPC: hold A to tie it up
+      const e = bodyInReach(true);
+      if (e) { tie = { npc: e, t: TIE_FRAMES }; aHold = -1; return; }
+    }
+    if (!held) { tryTakedown(); aHold = -1; return; }
+    if (held === "coin" || held === "stone") startAim();
+  }
+  if (aHold < 0) return;                                 // this press was a takedown
+  if (keys & 16) aHold++;
+  if (released) {
+    const long = aHold >= DROP_HOLD;
+    if (aim) { if (long && !aimMoved) { aim = null; dropHeld(); } else toss(); }
+    else if (held) { if (long) dropHeld(); else useItem(); }
+    aHold = 0;
+  }
+}
+function updateAim() {                                   // the D-pad moves the cross, not the player
+  let dx = 0, dy = 0;
+  if (keys & 1) dy--; if (keys & 2) dy++; if (keys & 4) dx--; if (keys & 8) dx++;
+  if (dx || dy) { aim.x += dx * AIM_SPEED; aim.y += dy * AIM_SPEED; aimMoved = true; clampAim(); }
+}
+function npcBox(e, x, y) {                               // point inside the NPC's body?
+  return x >= e.fx - 4 && x < e.fx + 4 && y >= e.fy - 13 && y <= e.fy;
+}
+function updateFlying() {
+  for (const f of [...flying]) {
+    if (f.name === "shuriken") {                         // straight line until an NPC, a wall or the edge
+      let done = false;
+      for (let s = 0; s < SHURIKEN_SPEED && !done; s++) {
+        const nx = f.x + f.dx, ny = f.y + f.dy;
+        const hit = npcs.find(e => e.state !== NS_DOWN && npcBox(e, nx, ny));
+        if (hit) { knockOut(hit); landItem("shuriken", hit.fx, hit.fy - 2); done = true; break; }
+        if (!inScreen(nx, ny)) { landItem("shuriken", f.x, f.y); done = true; break; }
+        if (opaquePx(Math.floor(nx), Math.floor(ny))) {  // stop in front of the wall (it flies over the ravine)
+          landItem("shuriken", f.x - f.dx * 4, f.y - f.dy * 4); done = true; break;
+        }
+        f.x = nx; f.y = ny;
+      }
+      if (done) flying.splice(flying.indexOf(f), 1);
+    } else if (++f.t >= f.n) {                           // coin / stone lands
+      flying.splice(flying.indexOf(f), 1);
+      const it = landItem(f.name, f.x1, f.y1);
+      if (f.name === "stone") stoneLanded(f.x1, f.y1);
+      else it.thrown = true;
+    }
+  }
+}
+/* NPCs near a landed stone turn to look at it (the short way round) for 4 s, then look back */
+function stoneLanded(x, y) {
+  for (const e of npcs) {
+    if (e.state === NS_DOWN || e.state === NS_ATTACK) continue;
+    if (Math.hypot(e.fx - x, e.fy - 5 - y) > STONE_RADIUS) continue;
+    const prev = e.distract ? e.distract.prev : e.ang;
+    const pause = e.distract && e.distract.pause > 0 ? e.distract.pause : STONE_PAUSE;   // a second stone doesn't restart the pause
+    e.distract = { pause, t: STONE_LOOK, ang: angleOf(x - e.fx, y - (e.fy - 5)), prev, back: false };
+    e.look = 0;
+  }
+}
+/* does the NPC's cone light any pixel of this item? */
+function coneSeesItem(e, it) {
+  if (inBush(it.x + 4, it.y + 4)) return false;         // hidden in a bush
+  const [ex, ey] = eyeOf(e), k = coneK(e);
+  if (Math.abs(it.x + 4 - ex) > CONE_LEN + 8 || Math.abs(it.y + 4 - ey) > CONE_LEN + 8) return false;
+  for (let y = it.y; y < it.y + 8; y++) for (let x = it.x; x < it.x + 8; x++) if (coneHas(ex, ey, k, x, y)) return true;
+  return false;
+}
+function coneSeesBody(e, o) {                            // the lying figure: about 12 x 8 px
+  const [ex, ey] = eyeOf(e), k = coneK(e), bx = Math.floor(o.fx) - 6, by = Math.floor(o.fy) - 9 + LIE_DROP;
+  if (Math.abs(bx + 6 - ex) > CONE_LEN + 8 || Math.abs(by + 4 - ey) > CONE_LEN + 8) return false;
+  for (let y = by; y < by + 8; y += 2) for (let x = bx; x < bx + 12; x += 2) if (coneHas(ex, ey, k, x, y)) return true;
+  return false;
+}
+function resumeDuty(e) {                                   // carry on with the current step
+  e.state = NS_NORMAL;
+  if (e.kind === "guard") setDest(e, e.post[0], e.post[1]);
+  else resumeRoute(e);
+}
+/* a route NPC picks up its script again. A rotation guard must keep its place in the loop:
+   it walks back to where it stood, and a turn it was in the middle of ends at the same facing. */
+const turnSign = s => (s.turn ? Math.sign(s.turn) : s.cw !== undefined ? 1 : -1);   // +1 clockwise
+function resumeRoute(e) {
+  e.routeDest = false;
+  if (!e.relay) { e.rotLeft = null; return; }
+  const s = e.route[e.ri];
+  if (!s.go) { e.returning = true; setDest(e, e.home[0], e.home[1]); }
+  if (e.rotLeft !== null) e.rotLeft = ((e.turnEnd - e.ang) * turnSign(s)) & 255;
+}
+/* coin: walk to it, wait, pick it up, wait, turn round clockwise, walk back, face the old way */
+function startCoin(e, it) {
+  it.claimed = true;
+  e.state = NS_COIN; e.look = 0;
+  e.coin = { item: it, phase: "go", t: 0, ox: Math.floor(e.fx), oy: Math.floor(e.fy), oang: e.ang };
+  setDest(e, it.x + 4, Math.min(PLAY_H - 4, it.y + 6));
+}
+function updateCoin(e) {
+  const c = e.coin;
+  switch (c.phase) {
+    case "go":
+      if (!items.includes(c.item)) { c.phase = "turn"; c.t = 0; break; }   // someone else took it
+      if (walk(e, SEARCH_SPEED)) { c.phase = "wait1"; c.t = COIN_WAIT; }
+      break;
+    case "wait1":
+      if (--c.t <= 0) {
+        const i = items.indexOf(c.item);
+        if (i >= 0) items.splice(i, 1);                  // the NPC pockets the coin
+        c.phase = "wait2"; c.t = COIN_WAIT;
+      }
+      break;
+    case "wait2":
+      if (--c.t <= 0) { c.phase = "turn"; e.want = angleOf(c.ox - e.fx, c.oy - e.fy); }
+      break;
+    case "turn": {                                       // clockwise only
+      const df = (e.want - e.ang + 256) & 255;
+      if (df <= TURN_RATE) { e.ang = e.want; c.phase = "back"; setDest(e, c.ox, c.oy); }
+      else e.ang = (e.ang + TURN_RATE) & 255;
+      return;
+    }
+    case "back":
+      if (walk(e, PATROL_SPEED)) { c.phase = "face"; e.want = c.oang; }
+      break;
+    case "face":
+      if (e.ang === e.want) { e.coin = null; resumeDuty(e); }
+      break;
+  }
+  turn(e);
+}
+
+/* walking over an item: drop what you hold (it stays put for 4 s), take the new one */
+function pickUp() {
+  const bx = Math.floor(player.fx) - 4, by = Math.floor(player.fy) - 12;
+  for (const it of items) if (it.lock) it.lock--;
+  const it = items.find(i => !i.lock && !i.armed && i.x < bx + 8 && i.x + 8 > bx && i.y < by + 13 && i.y + 8 > by);
+  if (!it) return;
+  items.splice(items.indexOf(it), 1);
+  if (held) items.push({ name: held, x: Math.floor(player.fx) - 4, y: Math.floor(player.fy) - 6, lock: DROP_LOCK });
+  held = it.name;
+}
+
+function makeNpc(def) {
+  const [x, y] = def.start || def.guard;
+  const e = { kind: def.route ? "route" : "guard", fx: x, fy: y, ang: def.face, want: def.face, state: NS_NORMAL, spot: 0, seen: false, stateT: 0,
+              tx: x, ty: y, nx: x, ny: y, dist: null, arrived: false, pauseT: 0,
+              sx: 0, sy: 0, lx: 0, ly: 0, retargetT: 0, animT: 0, step: 0, lookT: 0, look: 0, sway: 0, koT: 0, vanishT: 0,
+              distract: null, coin: null,
+              route: def.route || null, ri: def.ri || 0, routeDest: false, rotLeft: null, turnEnd: 0, waitBase: null,   // route NPCs
+              home: [x, y], relay: !!(def.route && def.route.some(s => s.wait)),
+              post: def.guard || null, face: def.face, sweep: def.sweep || 0 };     // guards
+  if (e.kind === "guard") setDest(e, x, y);
+  return e;
+}
+const savedLevel = (() => { try { return +(localStorage.getItem("stealth-level") || 0); } catch (e) { return 0; } })();
+function startLevel(i) {
+  levelNo = i; level = LEVELS[i];
+  try { localStorage.setItem("stealth-level", String(i)); } catch (e) { /* (not available) */ }
+  buildMap(level); bushes = level.bushes;
+  player = { fx: level.spawn[0], fy: level.spawn[1], dir: DIR_FROM[0][1], step: 0, anim: 0, subx: 0, suby: 0, crouch: false };
+  held = null; aHold = 0; aim = null; flying = []; tie = null; grabbed = null;
+  placeItems();
+  npcs = level.npcs.map(makeNpc); signals = {};
+  banner = null; gstate = G_PLAY; frame = 0;
+  levelName.textContent = "LEVEL " + (i + 1);
+}
+
+/* path finding: breadth-first distances from the destination cell */
+function setDest(e, x, y) {
+  e.tx = x; e.ty = y; e.arrived = false;
+  const d = new Int16Array(CW * CH).fill(-1), q = [];
+  const t = (y >> 3) * CW + (x >> 3);
+  d[t] = 0; q.push(t);
+  for (let h = 0; h < q.length; h++) {
+    const c = q[h], cx = c % CW, cy = (c / CW) | 0;
+    for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nx = cx + ox, ny = cy + oy;
+      if (solidAt(nx, ny)) continue;
+      const m = ny * CW + nx;
+      if (d[m] < 0) { d[m] = d[c] + 1; q.push(m); }
+    }
+  }
+  e.dist = d;
+}
+function walk(e, speed) {
+  if (e.arrived) return true;
+  let dx = e.nx - e.fx, dy = e.ny - e.fy;
+  if (dx === 0 && dy === 0) {
+    const x = Math.floor(e.fx), y = Math.floor(e.fy), cx = x >> 3, cy = y >> 3, d = e.dist;
+    const here = d[cy * CW + cx];
+    if (here === 0) {
+      if (x === e.tx && y === e.ty) { e.arrived = true; return true; }
+      e.nx = e.tx; e.ny = e.ty;
+    } else {
+      let best = here < 0 ? 9999 : here, bx = 0, by = 0, found = false;
+      for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const nx = cx + ox, ny = cy + oy;
+        if (solidAt(nx, ny)) continue;
+        const v = d[ny * CW + nx];
+        if (v < 0 || v >= best) continue;
+        if (ox && oy && (solidAt(cx + ox, cy) || solidAt(cx, cy + oy))) continue;   // no cutting corners
+        best = v; bx = ox; by = oy; found = true;
+      }
+      if (!found) { e.arrived = true; return true; }
+      e.nx = (cx + bx) * 8 + 4; e.ny = (cy + by) * 8 + 4;
+    }
+    dx = e.nx - e.fx; dy = e.ny - e.fy;
+    if (dx === 0 && dy === 0) return false;
+    e.want = angleOf(dx, dy);
+  }
+  const step = dx && dy ? speed * 0.7071 : speed;
+  e.fx += Math.sign(dx) * Math.min(Math.abs(dx), step);
+  e.fy += Math.sign(dy) * Math.min(Math.abs(dy), step);
+  if (++e.animT >= 16) { e.animT = 0; e.step = (e.step + 1) & 3; }
+  return false;
+}
+function turn(e) {
+  let df = ((e.want - e.ang + 128) & 255) - 128;
+  if (df > TURN_RATE) e.ang = (e.ang + TURN_RATE) & 255;
+  else if (df < -TURN_RATE) e.ang = (e.ang - TURN_RATE) & 255;
+  else e.ang = e.want;
+}
+const eyeOf = e => [Math.floor(e.fx), Math.floor(e.fy) - 5];
+// the cone points where the NPC looks: its walking direction plus the look-around sway
+const coneK = e => Math.round(e.ang + e.look) & 255;
+
+function goAttack(e) {
+  e.state = NS_ATTACK; e.lx = Math.floor(player.fx); e.ly = Math.floor(player.fy);
+  setDest(e, e.lx, e.ly); e.retargetT = 8;
+}
+function searchNext(e) {
+  let cx = e.sx >> 3, cy = e.sy >> 3;
+  for (let i = 0; i < 8; i++) {
+    const x = (e.sx >> 3) + (rnd() % (2 * SEARCH_RANGE + 1)) - SEARCH_RANGE;
+    const y = (e.sy >> 3) + (rnd() % (2 * SEARCH_RANGE + 1)) - SEARCH_RANGE;
+    if (!solidAt(x, y)) { cx = x; cy = y; break; }
+  }
+  setDest(e, cx * 8 + 4, cy * 8 + 4);
+}
+function goSuspicious(e, x, y) {
+  e.state = NS_SUSPICIOUS; e.stateT = SEARCH_FRAMES; e.sx = x; e.sy = y; e.pauseT = 20;
+  searchNext(e);
+}
+/* back from searching: route NPCs walk to the nearest point on their route and carry on from there */
+function backToDuty(e) {
+  e.state = NS_NORMAL; e.spot = 0;
+  if (e.kind === "guard") { setDest(e, e.post[0], e.post[1]); return; }
+  if (e.relay) { resumeRoute(e); return; }
+  let best = 0, bd = 1e9;
+  e.route.forEach((s, k) => { if (!s.go) return; const dd = Math.abs(e.fx - s.go[0]) + Math.abs(e.fy - s.go[1]); if (dd < bd) { bd = dd; best = k; } });
+  e.ri = best; e.routeDest = false; e.rotLeft = null;
+}
+/* the NPC's normal duty, one frame. Returns 1 while a route NPC is walking (it looks around then). */
+function duty(e) {
+  if (e.kind === "route") {
+    if (e.returning) {                                   // back to where it stood before it was distracted
+      if (!walk(e, PATROL_SPEED)) return true;
+      e.returning = false;
+    }
+    const s = e.route[e.ri];
+    if (s.go) {
+      if (!e.routeDest) { setDest(e, s.go[0], s.go[1]); e.routeDest = true; }
+      if (!walk(e, PATROL_SPEED)) return true;
+      e.home = [s.go[0], s.go[1]];
+    } else if (s.turn || s.cw !== undefined || s.ccw !== undefined) {   // turning on the spot
+      const sg = turnSign(s);
+      if (e.rotLeft === null) {
+        e.turnEnd = s.turn ? (e.ang + s.turn) & 255 : sg > 0 ? s.cw : s.ccw;
+        e.rotLeft = s.turn ? Math.abs(s.turn) : ((e.turnEnd - e.ang) * sg) & 255;
+      }
+      const r = Math.min(TURN_RATE, e.rotLeft);
+      e.ang = (e.ang + r * sg) & 255; e.want = e.ang; e.rotLeft -= r;
+      if (e.rotLeft > 0) return false;
+      e.rotLeft = null;
+    } else if (s.turnTo !== undefined) {                 // turn the short way to a facing
+      e.want = s.turnTo; turn(e);
+      if (e.ang !== s.turnTo) return false;
+    } else if (s.signal) {                               // bump: the pair there starts its shift
+      signals[s.signal] = (signals[s.signal] || 0) + 1;
+    } else if (s.wait) {                                 // stand at the post until the next bump
+      if (e.waitBase === null) e.waitBase = signals[s.wait] || 0;
+      if ((signals[s.wait] || 0) <= e.waitBase) return false;
+      e.waitBase = null;
+    } else if (s.free) {                                 // wait until the post is empty
+      if (npcs.some(o => o !== e && Math.abs(o.fx - s.free[0]) < 8 && Math.abs(o.fy - s.free[1]) < 8)) return false;
+    }
+    e.ri = (e.ri + 1) % e.route.length; e.routeDest = false;
+    return false;
+  }
+  if (!walk(e, PATROL_SPEED)) return false;              // guard: back to the post first
+  if (e.lookT) { e.lookT--; return false; }             // at the post: sweep the view, pause at each end
+  if (e.want === e.ang) {
+    const a = (e.face - e.sweep) & 255, b = (e.face + e.sweep) & 255;
+    e.want = e.want === a ? b : a; e.lookT = 90;
+  }
+  return false;
+}
+function killPlayer() { gstate = G_DEAD; banner = ["YOU WERE CAUGHT", "A: TRY AGAIN"]; }
+
+function updateNpc(e) {
+  if (e.state === NS_DOWN) {                            // knocked out: back on its feet after 20 s, and suspicious
+    if (e.tied) return;                                 // tied up: down for good
+    if (--e.koT <= 0) {
+      e.spot = 0; e.ang = e.want;
+      if (grabbed && grabbed.npc === e) grabbed = null;
+      if (tie && tie.npc === e) { tie = null; e.state = NS_ATTACK; killPlayer(); return; }   // woke up while being tied
+      goSuspicious(e, Math.floor(e.fx), Math.floor(e.fy));
+    }
+    return;
+  }
+  const x = Math.floor(e.fx), y = Math.floor(e.fy), px = Math.floor(player.fx), py = Math.floor(player.fy);
+  if (Math.abs(x - px) < TOUCH_X && Math.abs(y - py) < TOUCH_Y && !(player.crouch && calm(e))) { killPlayer(); return; }   // bumped into it (a calm NPC walks past you crouching in a bush)
+  const trap = items.find(i => i.armed && i.x < x + 4 && i.x + 8 > x - 4 && i.y < y + 3 && i.y + 8 > y - 3);
+  if (trap) { trap.armed = false; knockOut(e); return; }   // stepped in a trap
+  if (e.state !== NS_ATTACK) {
+    if (e.seen) {                                       // being spotted: stop and stare
+      if (e.state === NS_COIN) { e.coin = null; resumeDuty(e); }   // seeing you beats the coin
+      e.distract = null;
+      // the meter fills faster the closer you are: a full meter takes 2.25 s at the tip of the cone, down to nothing at the guard
+      const d = Math.min(CONE_LEN, Math.max(1, Math.hypot(px - x, (py - 6) - (y - 5))));
+      e.spot += SPOT_FRAMES / (SPOT_FRAMES * d / CONE_LEN);
+      if (e.spot >= SPOT_FRAMES) { goAttack(e); return; }
+      e.lx = px; e.ly = py; turn(e); return;
+    }
+    if (e.spot) { e.spot = Math.max(0, e.spot - 1); if (e.state === NS_NORMAL) goSuspicious(e, e.lx, e.ly); }
+  }
+  if (e.distract && e.state !== NS_ATTACK) {           // looking at where a stone landed
+    const d = e.distract;
+    if (d.pause > 0) { d.pause--; e.want = e.ang; }    // hears it: stops for 1 s before turning
+    else if (!d.back) { e.want = d.ang; if (--d.t <= 0) { d.back = true; e.want = d.prev; } }
+    else if (e.ang === d.prev) e.distract = null;
+    else e.want = d.prev;
+    turn(e);
+    return;
+  }
+  if (e.state === NS_NORMAL || e.state === NS_COIN) {  // a knocked-out NPC in view (and not in a bush): suspicious
+    const body = npcs.find(o => o !== e && o.state === NS_DOWN && !bodyInBush(o) && coneSeesBody(e, o));
+    if (body) { e.coin = null; e.distract = null; goSuspicious(e, Math.floor(body.fx), Math.floor(body.fy)); return; }
+  }
+  if (e.state === NS_COIN) { updateCoin(e); return; }
+  if (e.state === NS_NORMAL) {                          // a coin in view: go and get it
+    const coin = items.find(i => i.name === "coin" && i.thrown && !i.claimed && coneSeesItem(e, i));
+    if (coin) { startCoin(e, coin); return; }
+  }
+  switch (e.state) {
+    case NS_NORMAL:
+      if (duty(e)) {                                     // look left and right while walking; the sprite keeps facing the way it walks
+        e.sway = (e.sway + 1) % SWAY_FRAMES;
+        e.look = LOOK_SWAY * Math.sin(2 * Math.PI * e.sway / SWAY_FRAMES);
+      }
+      break;
+    case NS_SUSPICIOUS:
+      if (!--e.stateT) { backToDuty(e); break; }
+      if (e.pauseT) { e.pauseT--; if (!(e.pauseT & 31)) e.want = rnd(); break; }
+      if (walk(e, SEARCH_SPEED)) { e.pauseT = 64; searchNext(e); }
+      break;
+    case NS_ATTACK:
+      if (Math.abs(x - px) <= KILL_DIST && Math.abs(y - py) <= KILL_DIST) { killPlayer(); break; }
+      if (e.seen) {
+        e.lx = px; e.ly = py;
+        if (e.retargetT) e.retargetT--;
+        else if ((e.lx >> 3) !== (e.tx >> 3) || (e.ly >> 3) !== (e.ty >> 3)) { setDest(e, e.lx, e.ly); e.retargetT = 8; }
+      }
+      if (walk(e, ATTACK_SPEED)) {                      // last known position: is the player close?
+        const ex = x, ey = y - 5, cx = px, cy = py - 6;
+        if ((ex - cx) ** 2 + (ey - cy) ** 2 <= LOOK_RADIUS ** 2 && los(ex, ey, cx, cy)) {
+          e.lx = px; e.ly = py; setDest(e, px, py);
+        } else goSuspicious(e, x, y);
+      }
+      break;
+  }
+  if (e.state !== NS_NORMAL || e.kind !== "route" || e.rotLeft !== null)   // otherwise look straight ahead
+    e.look = Math.abs(e.look) < 0.5 ? 0 : e.look * 0.9;
+  turn(e);
+}
+function los(x0, y0, x1, y1) {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+  for (let i = 1; i <= n; i++)
+    if (opaquePx(Math.floor(x0 + (x1 - x0) * i / n), Math.floor(y0 + (y1 - y0) * i / n))) return false;
+  return true;
+}
+function feetBlocked(x, y) {                              // feet box x-4..x+3, y-3..y+2
+  if (x < 4 || x > W - 4 || y < 3 || y > PLAY_H - 3) return true;
+  return solidPx(x - 4, y - 3) || solidPx(x + 3, y - 3) || solidPx(x - 4, y + 2) || solidPx(x + 3, y + 2);
+}
+function updatePlayer() {
+  let dx = 0, dy = 0;
+  if (tie) { player.step = 0; player.anim = 13; return; }   // busy tying
+  if (keys & 1) dy--; if (keys & 2) dy++; if (keys & 4) dx--; if (keys & 8) dx++;
+  const p = player;
+  if (dx || dy) { p.dir = DIR_FROM[dy + 1][dx + 1]; if (++p.anim >= 14) { p.anim = 0; p.step = (p.step + 1) & 3; } }
+  else { p.step = 0; p.anim = 13; }
+  const base = grabbed ? DRAG_SPEED : p.crouch ? CROUCH_SPEED : PLAYER_SPEED, sp = dx && dy ? base * 0.7071 : base;
+  p.subx = dx ? p.subx + sp : 0; p.suby = dy ? p.suby + sp : 0;
+  while (p.subx >= 1) { p.subx -= 1; if (!feetBlocked(Math.floor(p.fx) + dx, Math.floor(p.fy))) p.fx += dx; }
+  while (p.suby >= 1) { p.suby -= 1; if (!feetBlocked(Math.floor(p.fx), Math.floor(p.fy) + dy)) p.fy += dy; }
+}
+function tryTakedown() {
+  const px = Math.floor(player.fx), py = Math.floor(player.fy);
+  let left = 0;
+  for (const e of npcs) {
+    if (e.state === NS_DOWN) continue;
+    if (e.state !== NS_ATTACK && Math.abs(Math.floor(e.fx) - px) <= TAKEDOWN_DIST && Math.abs(Math.floor(e.fy) - py) <= TAKEDOWN_DIST) {
+      if (e.state === NS_SUSPICIOUS && e.seen) { killPlayer(); return; }   // a suspicious NPC that sees you fights back
+      knockOut(e); continue;
+    }
+    left++;
+  }
+  checkClear();
+}
+function checkClear() {
+  if (gstate !== G_PLAY) return;
+  if (level.clearOnAllDown && npcs.every(e => e.state === NS_DOWN)) { levelDone("AREA CLEAR!"); return; }
+  const x = level.exit;                                  // reached the exit?
+  if (x && !x.locked && player.fx >= x.x && player.fx < x.x + x.w && player.fy - 4 < x.y + x.h) levelDone("LEVEL CLEAR!");
+}
+function levelDone(text) {
+  gstate = G_CLEAR;
+  banner = [text, levelNo + 1 < LEVELS.length ? "A: NEXT LEVEL" : "A: BACK TO START"];
+}
+/* the NPC sees the player if its cone lights any pixel of the player's 8 x 13 body box */
+function sees(e) {
+  if (e.state === NS_DOWN) return false;
+  if (player.crouch && (calm(e) || e.state === NS_SUSPICIOUS)) return false;   // crouching in a bush (attackers still see you)
+  const [ex, ey] = eyeOf(e), k = coneK(e), bx = Math.floor(player.fx) - 4, by = Math.floor(player.fy) - 12;
+  if (Math.abs(bx + 4 - ex) > CONE_LEN + 8 || Math.abs(by + 6 - ey) > CONE_LEN + 8) return false;
+  for (let y = by; y < by + 13; y++) for (let x = bx; x < bx + 8; x++) if (coneHas(ex, ey, k, x, y)) return true;
+  return false;
+}
+
+let selLevel = Math.max(0, Math.min(LEVELS.length - 1, savedLevel || 0));
+function toTitle() { gstate = G_TITLE; levelName.textContent = "SELECT LEVEL"; }
+function step() {
+  const now = input(), pressed = now & ~keys;
+  prevKeys = keys; keys = now;
+  if (gstate === G_TITLE) {                               // level select
+    rnd();
+    if (pressed & 4) selLevel = (selLevel + LEVELS.length - 1) % LEVELS.length;
+    if (pressed & (8 | 128)) selLevel = (selLevel + 1) % LEVELS.length;
+    if (pressed & (32 | 16)) startLevel(selLevel);
+    return;
+  }
+  if (pressed & 128) { toTitle(); return; }               // SELECT: back to the level select
+  frame++;
+  if (gstate === G_PLAY) {
+    if (aim) updateAim(); else updatePlayer();
+    updateDrag();
+    updateTie();
+    updateCrouch(pressed);
+    updateVanish();
+    pickUp();
+    handleA(pressed, (prevKeys & 16) && !(keys & 16));
+    updateFlying();
+    checkClear();
+  } else if (pressed & (16 | 32)) {
+    if (gstate === G_DEAD) startLevel(levelNo);
+    else if (levelNo + 1 < LEVELS.length) { selLevel = levelNo + 1; startLevel(levelNo + 1); }
+    else { selLevel = 0; toTitle(); }
+    return;
+  }
+  for (const e of npcs) e.seen = gstate === G_PLAY && sees(e);
+  if (gstate === G_PLAY) for (const e of npcs) { updateNpc(e); if (gstate !== G_PLAY) break; }
+}
+
+/* ------------------------------------------------------------------ drawing */
+const cv = document.getElementById("screen"), ctx = cv.getContext("2d");
+const img = ctx.createImageData(W, H), fb = new Uint8Array(W * H);
+const SHADES = ["--lcd-0", "--lcd-1", "--lcd-2", "--lcd-3"].map(v => {
+  const s = getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  return [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
+});
+function bgTile(t, cx, cy) {
+  const px = BG[t];
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) fb[(cy * 8 + y) * W + cx * 8 + x] = px[y * 8 + x];
+}
+function sprTile(t, x0, y0, pal) {
+  const px = SPR[t];
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const c = px[y * 8 + x], X = x0 + x, Y = y0 + y;
+    if (c && X >= 0 && X < W && Y >= 0 && Y < H) fb[Y * W + X] = pal[c];
+  }
+}
+function spr16(t, x, y, pal) {                            // 8 x 16 sprite: tile t on top, t + 1 below
+  sprTile(t, x, y, pal); sprTile(t + 1, x, y + 8, pal);
+}
+/* a 16 x 16 character. crouch: rows 7-9 (the waist) left out, so the figure is 3 px lower.
+   dither: only every other pixel, in a checkerboard - how things look through the leaves of a bush. */
+function person(fx, fy, row, stp, down, pal, crouch = false, dither = false) {
+  const x0 = Math.floor(fx) - 8, y0 = Math.floor(fy) - 13 + (down ? LIE_DROP : 0), t = down ? T_LYING : HERO_ANIM[row][stp] * 4;
+  for (let sy = 0; sy < 16; sy++) {
+    if (crouch && sy >= 7 && sy <= 9) continue;
+    const Y = y0 + (crouch && sy < 7 ? sy + 3 : sy);
+    for (let sx = 0; sx < 16; sx++) {
+      const tile = SPR[t + (sx >> 3) * 2 + (sy >> 3)], c = tile[(sy & 7) * 8 + (sx & 7)], X = x0 + sx;
+      if (!c || X < 0 || X >= W || Y < 0 || Y >= H || (dither && ((X + Y) & 1))) continue;
+      fb[Y * W + X] = pal[c];
+    }
+  }
+}
+function itemArt(name, x0, y0) {
+  ITEMS[name].forEach((row, y) => {
+    for (let x = 0; x < 8; x++) {
+      const c = row[x], X = x0 + x, Y = y0 + y;
+      if (c !== "." && X >= 0 && X < W && Y >= 0 && Y < H) fb[Y * W + X] = +c;
+    }
+  });
+}
+/* glare on a thrown coin: a small four-point star flares up on its rim every 1.5 s.
+   Rays are white over the coin and dark where they stick out over the floor. */
+const GLARE = [1, 2, 3, 4, 4, 3, 2, 1];                  // star size per 3-frame step
+function glare(x0, y0, phase) {
+  const t = (frame + phase) % 90, i = Math.floor(t / 3);
+  if (i >= GLARE.length) return;
+  const n = GLARE[i], cx = x0 + 2, cy = y0 + 2, art = ITEMS.coin;
+  const put = (x, y, tip) => {
+    if (x < 0 || x >= W || y < 0 || y >= PLAY_H) return;
+    const onCoin = x >= x0 && x < x0 + 8 && y >= y0 && y < y0 + 8 && art[y - y0][x - x0] !== ".";
+    fb[y * W + x] = onCoin && !tip ? 0 : 3;
+  };
+  put(cx, cy, false);
+  for (let k = 1; k <= n; k++) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) put(cx + dx * k, cy + dy * k, k === n && n > 1);
+}
+/* bush: a leafy 24 x 24 blob, drawn over the characters so a body inside looks hidden */
+const BUSH_ART = (() => {
+  const a = [];
+  let r = 7;
+  const rnd2 = () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; };
+  for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) {
+    const dx = x - 11.5, dy = y - 12, d = Math.hypot(dx, dy * 1.08) + Math.sin(Math.atan2(dy, dx) * 7) * 1.2;
+    let c = -1;
+    if (d < 11.6) {
+      c = 2;
+      if (d > 10.4) c = 3;                                 // outline
+      else if (rnd2() < 0.18) c = 3;                       // shadowed leaves
+      else if (dy < -2 && dx < 3 && rnd2() < 0.3) c = 1;   // highlights, top left
+    }
+    a.push(c);
+  }
+  return a;
+})();
+function drawBushes() {
+  for (const b of bushes) for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) {
+    const c = BUSH_ART[y * 24 + x], X = b.x + x, Y = b.y + y;
+    if (c >= 0 && X < W && Y < PLAY_H) fb[Y * W + X] = c;
+  }
+}
+function rect(x0, y0, w, h, c) {
+  for (let y = Math.max(0, y0); y < Math.min(H, y0 + h); y++)
+    for (let x = Math.max(0, x0); x < Math.min(W, x0 + w); x++) fb[y * W + x] = c;
+}
+function textAt(s, cx, cy) { for (let i = 0; i < s.length; i++) bgTile(B_FONT + Math.max(0, FONT_CHARS.indexOf(s[i])), cx + i, cy); }
+function itemBar() {                                     // bottom row: the one inventory slot
+  for (let cx = 0; cx < 20; cx++) bgTile(B_FONT, cx, 17);
+  textAt("ITEM", 1, 17);
+  rect(47, 136, 10, 8, 0);
+  if (held) {
+    itemArt(held, 48, 136);
+    const dropArmed = aHold >= DROP_HOLD && !(aim && aimMoved);
+    textAt(tie ? "TYING UP" : dropArmed ? (frame & 16 ? "LET GO: DROP" : "") : player.crouch ? "HIDING" : held.toUpperCase(), 8, 17);
+  }
+  else textAt(tie ? "TYING UP" : grabbed ? "DRAGGING" : player.crouch ? "HIDING" : "EMPTY", 8, 17);
+}
+function textRow(s, cy) {
+  const x0 = (20 - s.length) >> 1;
+  for (let cx = 0; cx < 20; cx++) bgTile(B_FONT, cx, cy);
+  for (let i = 0; i < s.length; i++) bgTile(B_FONT + Math.max(0, FONT_CHARS.indexOf(s[i])), x0 + i, cy);
+}
+const TITLE = ["", "", "STEALTH", "", "PROTOTYPE", "", "", "", "", "", "",
+               "LEFT RIGHT: LEVEL", "START: PLAY", "", "", "HERO ART: GIBBONGL", "CC0", ""];
+/* ravine cell: dark, with a lit rim where it meets the ground (the far edge, top and sides) */
+function pitTile(cx, cy) {
+  const open = (x, y) => x >= 0 && y >= 0 && x < CW && y < CH && level.map[y][x] !== "o";
+  const up = open(cx, cy - 1), left = open(cx - 1, cy), right = open(cx + 1, cy), down = open(cx, cy + 1);
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    let c = 3;
+    if ((up && y < 2) || (left && x < 1) || (right && x > 6)) c = 2;     // rock face catching the light
+    else if (down && y > 6) c = 2;
+    else if (((cx * 8 + x) * 7 + (cy * 8 + y) * 13) % 23 === 0) c = 2;  // a few stones down there
+    fb[(cy * 8 + y) * W + cx * 8 + x] = c;
+  }
+}
+/* exit: a dashed frame with arrows pointing out of the level; locked: crossed bars */
+function drawExit(x) {
+  for (let i = 0; i < x.w; i++) { if (!(i & 1)) { rect(x.x + i, x.y, 1, 1, 3); rect(x.x + i, x.y + x.h - 1, 1, 1, 3); } }
+  for (let i = 0; i < x.h; i++) { if (!(i & 1)) { rect(x.x, x.y + i, 1, 1, 3); rect(x.x + x.w - 1, x.y + i, 1, 1, 3); } }
+  const cx = x.x + (x.w >> 1), cy = x.y + (x.h >> 1);
+  if (x.locked) {
+    for (let k = -3; k <= 3; k++) { rect(cx + k, cy + k, 1, 1, 3); rect(cx + k, cy - k, 1, 1, 3); }
+    return;
+  }
+  const off = (frame >> 4) & 1;                          // two chevrons, drifting up
+  for (const dy of [-2 - off, 2 - off]) for (let k = 0; k < 3; k++) { rect(cx - k, cy + dy + k, 1, 1, 3); rect(cx + k, cy + dy + k, 1, 1, 3); }
+}
+function draw() {
+  if (gstate === G_TITLE) {
+    TITLE.forEach((s, y) => textRow(s, y));
+    textRow("LEVEL " + (selLevel + 1), 7);
+    textRow(LEVELS[selLevel].name, 9);
+    const bob = (frame >> 4) & 1;                       // arrows either side of the level number
+    frame++;
+    for (let k = 0; k < 4; k++) { rect(36 - bob + k, 59 - k, 1, 2 * k + 1, 0); rect(123 + bob - k, 59 - k, 1, 2 * k + 1, 0); }
+  } else {
+    for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) {
+      if (base[cy][cx] < 0) pitTile(cx, cy); else bgTile(base[cy][cx], cx, cy);
+    }
+    if (level.exit) drawExit(level.exit);
+    for (const e of npcs) {                               // cones: a checkerboard of light pixels over the floor, so the ground shows through
+      if (e.state === NS_DOWN) continue;
+      const [ex, ey] = eyeOf(e), c = cone(coneK(e)), vis = new Map();
+      c.rows.forEach((r, i) => {
+        const y = ey + c.dy0 + i;
+        if (y < 0 || y >= H) return;
+        for (let x = Math.max(0, ex + r[0]); x <= Math.min(W - 1, ex + r[1]); x++) {
+          const key = (y >> 3) * CW + (x >> 3);
+          let v = vis.get(key);
+          if (v === undefined) { v = cellVisible(ex >> 3, ey >> 3, x >> 3, y >> 3); vis.set(key, v); }
+          if (v && !((x + y) & 1) && fb[y * W + x] === 0) fb[y * W + x] = 1;
+        }
+      });
+    }
+    for (const it of items)                               // items blink while they can't be picked up
+      if (!it.lock || (frame & 8)) {
+        itemArt(it.name, it.x, it.y);
+        if (it.name === "coin" && it.thrown) glare(it.x, it.y, it.x * 7 + it.y * 3);
+      }
+    for (const f of flying) {
+      if (f.name === "shuriken") { itemArt("shuriken", Math.round(f.x) - 4, Math.round(f.y) - 4); continue; }
+      const t = f.t / f.n, x = f.x0 + (f.x1 - f.x0) * t, y = f.y0 + (f.y1 - f.y0) * t;
+      const h = Math.sin(Math.PI * t) * (8 + Math.hypot(f.x1 - f.x0, f.y1 - f.y0) * 0.35);   // the arc
+      rect(Math.round(x) - 2, Math.round(y) + 2, 4, 1, 2);                                     // shadow
+      itemArt(f.name, Math.round(x) - 4, Math.round(y - h) - 4);
+      if (f.name === "coin") glare(Math.round(x) - 4, Math.round(y - h) - 4, f.t * 2);   // glints as it spins through the air
+    }
+    // sprites: NPCs first, the player on top
+    for (const e of npcs)
+      person(e.fx, e.fy, ROW_FROM_OCT[((e.ang + 16) >> 5) & 7], e.step, e.state === NS_DOWN, PAL_NPC);
+    person(player.fx, player.fy, player.dir, player.step, gstate === G_DEAD, PAL_PLAYER, player.crouch);
+    drawBushes();
+    // inside a bush: knocked-out NPCs show through the leaves, dithered
+    for (const e of npcs) {
+      if (e.state !== NS_DOWN || !bodyInBush(e)) continue;
+      if (e.vanishT && (e.vanishT >> 2) & 1) continue;  // a tied body flickers out
+      person(e.fx, e.fy, 0, 0, true, PAL_GHOST, false, true);
+    }
+    // the player in a bush: dithered only while crouching (hidden from NPCs); standing, drawn in full over the leaves
+    if (playerInBush()) person(player.fx, player.fy, player.dir, player.step, gstate === G_DEAD, PAL_PLAYER, player.crouch, player.crouch);
+    for (const e of npcs) {
+      const ix = Math.floor(e.fx) - 4, iy = Math.floor(e.fy) - 24;
+      if (e.state === NS_ATTACK) spr16(T_BANG, ix, iy, PAL_PLAYER);
+      else if (e.state === NS_SUSPICIOUS || (e.state !== NS_DOWN && e.spot && (!e.seen || (frame & 4))))
+        spr16(T_QUESTION, ix, iy, PAL_PLAYER);
+    }
+    for (const e of npcs) {                               // knocked out: 10 px bar of the time left
+      if (e.state !== NS_DOWN) continue;
+      const x = Math.floor(e.fx) - 5, y = Math.floor(e.fy) - 15 + LIE_DROP, n = e.tied ? 10 : Math.ceil(10 * e.koT / KO_FRAMES);
+      rect(x - 1, y - 1, 12, 4, 3); rect(x, y, 10, 2, 0); rect(x, y, n, 2, 2);
+    }
+    if (tie) {                                            // tying: a bar above the player fills up over 4 s
+      const x = Math.floor(player.fx) - 5, y = Math.floor(player.fy) - 18, n = Math.ceil(10 * (TIE_FRAMES - tie.t) / TIE_FRAMES);
+      rect(x - 1, y - 1, 12, 4, 3); rect(x, y, 10, 2, 0); rect(x, y, n, 2, 1);
+    }
+    if (aim) {                                            // the aiming cross
+      const ax = Math.round(aim.x), ay = Math.round(aim.y);
+      rect(ax - 4, ay, 3, 1, 3); rect(ax + 2, ay, 3, 1, 3); rect(ax, ay - 4, 1, 3, 3); rect(ax, ay + 2, 1, 3, 3);
+      if (frame & 16) rect(ax, ay, 1, 1, 3);
+    }
+    itemBar();
+    if (banner) { textRow("", 14); textRow(banner[0], 15); textRow(banner[1], 16); textRow("", 17); }
+  }
+  const d = img.data;
+  for (let i = 0; i < W * H; i++) { const s = SHADES[fb[i]]; d[i * 4] = s[0]; d[i * 4 + 1] = s[1]; d[i * 4 + 2] = s[2]; d[i * 4 + 3] = 255; }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* ------------------------------------------------------------------ input: touch, mouse, keyboard */
+let padBits = 0, aDown = false, startDown = false, bDown = false, selDown = false, keyBits = 0, latch = 0;   // latch: quick taps between two frames
+const dpad = document.getElementById("dpad"), lit = document.getElementById("lit");
+const btnA = document.getElementById("btnA"), btnStart = document.getElementById("btnStart"), btnB = document.getElementById("btnB");
+const btnSelect = document.getElementById("btnSelect");
+let padPointer = null;
+function showPad() {                                     // highlight the pressed arm (Tether's d-pad)
+  const dx = (padBits & 8 ? 1 : 0) - (padBits & 4 ? 1 : 0), dy = (padBits & 2 ? 1 : 0) - (padBits & 1 ? 1 : 0);
+  if (!dx && !dy) { lit.hidden = true; return; }
+  lit.hidden = false; lit.style.left = (44 + dx * 44) + "px"; lit.style.top = (44 + dy * 44) + "px";
+}
+function padFrom(ev) {
+  const r = dpad.getBoundingClientRect();
+  const dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
+  const dead = r.width * 0.12;
+  if (dx * dx + dy * dy < dead * dead) padBits = 0;
+  else {
+    const oct = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;   // 0 = right, clockwise
+    padBits = [8, 8 | 2, 2, 2 | 4, 4, 4 | 1, 1, 1 | 8][oct];
+  }
+  showPad();
+}
+dpad.addEventListener("pointerdown", ev => { ev.preventDefault(); padPointer = ev.pointerId; dpad.setPointerCapture(ev.pointerId); padFrom(ev); latch |= padBits; });   // (a quick tap still counts)
+dpad.addEventListener("pointermove", ev => { if (ev.pointerId === padPointer) padFrom(ev); });
+const padUp = ev => { if (ev.pointerId !== padPointer) return; padPointer = null; padBits = 0; showPad(); };
+dpad.addEventListener("pointerup", padUp); dpad.addEventListener("pointercancel", padUp);
+dpad.addEventListener("contextmenu", ev => ev.preventDefault());
+function holdButton(el, set) {
+  el.addEventListener("pointerdown", ev => { ev.preventDefault(); el.setPointerCapture(ev.pointerId); set(true); el.classList.add("down"); });
+  const up = () => { set(false); el.classList.remove("down"); };
+  el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+  el.addEventListener("contextmenu", ev => ev.preventDefault());
+}
+holdButton(btnA, v => { aDown = v; if (v) latch |= 16; });
+holdButton(btnStart, v => { startDown = v; if (v) latch |= 32; });
+holdButton(btnB, v => { bDown = v; if (v) latch |= 64; });
+holdButton(btnSelect, v => { selDown = v; if (v) latch |= 128; });
+cv.addEventListener("pointerdown", ev => { ev.preventDefault(); if (gstate !== G_PLAY) latch |= 32; });   // tap the screen to start / continue
+const KEYMAP = { ArrowUp: 1, KeyW: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 4, KeyA: 4, ArrowRight: 8, KeyD: 8,
+                 KeyX: 16, Space: 16, KeyK: 16, Enter: 32, KeyZ: 64, KeyJ: 64, KeyQ: 128, Backspace: 128 };
+addEventListener("keydown", ev => { const b = KEYMAP[ev.code]; if (b) { keyBits |= b; latch |= b & 240; ev.preventDefault(); } });
+addEventListener("keyup", ev => { const b = KEYMAP[ev.code]; if (b) keyBits &= ~b; });
+addEventListener("blur", () => { keyBits = 0; padBits = 0; aDown = startDown = bDown = selDown = false; showPad(); });
+document.addEventListener("touchmove", ev => ev.preventDefault(), { passive: false });
+document.addEventListener("gesturestart", ev => ev.preventDefault());
+function input() {
+  const v = padBits | keyBits | (aDown ? 16 : 0) | (startDown ? 32 : 0) | (bDown ? 64 : 0) | (selDown ? 128 : 0) | latch;
+  latch = 0;
+  return v;
+}
+
+/* ------------------------------------------------------------------ main loop: fixed 60 steps per second */
+function start() {
+  toTitle();
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    acc += Math.min(100, now - last); last = now;
+    while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
