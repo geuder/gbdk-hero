@@ -3,9 +3,9 @@
 # make gfx        regenerate src/gfx.c / src/gfx.h (needs Python 3 + Pillow)
 # Uses lcc from your PATH, or set GBDK to the GBDK-2020 folder: make GBDK=~/gbdk
 LCC  := $(if $(GBDK),$(GBDK)/bin/lcc,lcc)
-CFLAGS := -Wl-m -Wm-yn"STEALTH" -Wf--opt-code-speed
+CFLAGS := -Wl-m -Wl-j -Wm-yn"STEALTH" -Wf--opt-code-speed
 
-SRC := src/main.c src/cone.c src/vram.c src/gfx.c
+SRC := src/main.c src/cone.c src/vram.c src/gfx.c src/levels.c
 
 stealth.gb: $(SRC) src/game.h src/gfx.h
 	$(LCC) $(CFLAGS) -o $@ $(SRC)

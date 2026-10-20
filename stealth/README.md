@@ -1,50 +1,52 @@
-# Stealth prototype — real-time tactics for the Game Boy
+# Stealth — real-time tactics for the Game Boy
 
-A first prototype of a Shadow Tactics–style stealth game for the original Game Boy (DMG),
-written in C with [GBDK-2020](https://github.com/gbdk-2020/gbdk-2020). It's about sneaking,
-not fighting armies: you steer one character and must avoid the guards' view cones, or take
-the guards down without being seen.
+A Shadow Tactics–style stealth game for the original Game Boy (DMG), written in C with
+[GBDK-2020](https://github.com/gbdk-2020/gbdk-2020). It's about sneaking, not fighting armies:
+you steer one character past the guards' view cones, or take the guards down without being
+seen. The design is worked out in the browser prototype (`web/`) and then ported to the Game
+Boy; this ROM is **stage 2 of that port**.
 
-![The map](docs/map.png) ![Getting spotted](docs/spotted.gif)
+![Title and the five levels](docs/levels.png)
 
 ## Controls
 
 | Button | Action |
 |---|---|
 | D-pad | Move in 8 directions (diagonals slowed to the same speed) |
-| A | Take down an NPC within reach, unless it is attacking you |
-| Start | Start the game from the title screen |
-| A (after death or clear) | Restart |
+| A | Take down a guard within reach (from behind: a suspicious guard that sees you fights back) |
+| Left / Right, Start | Choose a level on the title screen, start it |
+| Select | Back to the level select |
+| A (caught / level clear) | Try again / next level |
 
-## What's in the prototype
+## What's in the ROM (port stages 1 and 2)
 
-- **Map.** An open building in the middle of the screen with outer walls, three rooms
-  inside, and doors between them and to the outside. There is room to walk around the
-  outside.
-- **Player.** Starts in the bottom-left corner. Uses the same diver sprites as Tether
-  (GibbonGL's 8-direction template).
-- **NPCs.** They use the same sprites, drawn one shade darker through the second sprite
-  palette.
-  - The **patrol** starts in the top-right corner and walks counter-clockwise round the
-    house.
-  - The **guard** stands in the top-right room, facing the door, and sweeps its view
-    left and right.
-- **View cones.** Each cone is 20 px long and 30° wide, drawn on the background in light
-  grey. An NPC's facing turns smoothly in 256 steps, and the cone is drawn at 32 angles
-  (11.25° apart). The sprite shows the nearest of its 8 directions. Walls block the view
-  per 8×8 cell: a cell is lit only if no wall cell lies between it and the NPC's eye.
-- **Three NPC states:**
-  1. **Normal:** doing its duty, either patrolling or guarding.
-  2. **Suspicious (`?`):** it glimpsed you, but you left the cone within 3 s. It leaves its
-     duty and searches random spots around where it saw you for 8 s, then goes back.
-  3. **Attack (`!`):** you were in its cone for 3 s. It moves to your last known position
-     at full speed, and follows you as long as it keeps seeing you. If it reaches you, you
-     die. If you're not there when it arrives, it looks around: if you're within 20 px (with
-     line of sight) it goes for you again, otherwise it turns suspicious.
-- While you're in a cone, the NPC stops and stares, and a blinking `?` shows the detection
-  building up.
-- NPCs find their way round walls and through doors using a breadth-first path search on
-  the 8 px grid.
+- **Five levels** with a level select: First Steps, Distraction, The Ravine, Guard Rotation
+  and The House, the same as in the browser prototype. Reach the exit (level 5's exit is
+  locked for now: take everyone down instead).
+- **Map cells:** ground, floor, walls (block walking and seeing) and the ravine (blocks
+  walking only: guards see across it).
+- **Guard duties are scripts:** walk to a point, turn clockwise or anticlockwise, turn to a
+  facing, and for Guard Rotation, bump signals so five guards hand over their posts in turn.
+  Guards at a post sweep their view.
+- **View cones** are 60 px long and 30° wide, checkerboard-dithered, cut off by walls, and
+  sway ±10° while a guard walks.
+- **Detection gets faster the closer you are:** 2.25 s at the far end of a cone, down to
+  almost nothing right in front of a guard. Bumping into a guard kills you.
+- **Guard states:** normal, suspicious (`?`, searches where it saw you), attack (`!`), and
+  knocked out (a bar shows the 20 s until it gets up, suspicious). A guard that sees a
+  knocked-out body searches around it.
+
+Not ported yet (stage 3): items (shuriken, rope, trap, stone, coin), dragging and tying up
+bodies, bushes and crouching. Those need a bigger cartridge type (ROM bank switching), as
+this one is nearly full.
+
+### How the Game Boy version differs
+
+- **Cones are drawn per 4 × 4 px quarter-cell,** so their edges step in 4 px (the browser
+  draws them per pixel). Detection uses exactly the same quarter-cells, so what you see is
+  what the guards see.
+- **Guards update every other frame** (half of them each frame) with double steps, so their
+  speeds and timings are the same as in the browser.
 
 ## Browser prototype (ahead of the ROM)
 
@@ -69,47 +71,34 @@ You need GBDK-2020 (tested with 4.x / SDCC 4.5) and `make`.
 make                         # builds stealth.gb (32 KB, no MBC), with lcc on your PATH
 make GBDK=/path/to/gbdk      # or point it at a GBDK-2020 folder
 make gfx                     # regenerate src/gfx.c / gfx.h (Python 3 + Pillow)
+make CFLAGS+=-DPROF          # (testing: per-frame timing counters, see prof[] in main.c)
 ```
-
-## Tuning
-
-These are the `#define`s at the top of `src/main.c`:
-
-| Name | Default | Meaning |
-|---|---|---|
-| `SPOT_FRAMES` | 180 | Frames in a cone before attack (3 s) |
-| `SEARCH_FRAMES` | 480 | How long a suspicious NPC searches |
-| `PLAYER_SPEED` / `PATROL_SPEED` / `SEARCH_SPEED` / `ATTACK_SPEED` | 0.75 / 0.5 / 0.625 / 1 px per frame | Movement speeds |
-| `TURN_RATE` | 3 | How fast NPCs turn (256 units per full turn) |
-| `GUARD_SWEEP` | 40 | Guard looks ±56° around its facing |
-| `KILL_DIST`, `TAKEDOWN_DIST` | 9, 12 px | Reach for a kill or a takedown |
-
-The cone's length and width are set in `tools/make_gfx.py` (`CONE_LEN`, `CONE_DEG`). Run
-`make gfx` after changing them. The cone renderer can handle cones up to about 24 px long
-without changes.
 
 ## How it works
 
 | File | Contents |
 |---|---|
-| `src/main.c` | Map, player, NPC state machine, path finding, sprites, title |
-| `src/cone.c` | View cones drawn into a pool of background tiles |
-| `src/vram.c` | VRAM write queue, emptied in vblank and in the h-blanks of idle lines |
-| `tools/make_gfx.py` | Tiles, sprites, cone span tables and the cell line-of-sight table |
+| `src/main.c` | Map, player, guard state machine and route scripts, path finding, sprites, title |
+| `src/levels.c` | The five levels: maps, spawns, exits, guards and their route scripts |
+| `src/cone.c` | View cones, drawn by swapping background tiles per quarter-cell |
+| `src/vram.c` | VRAM write queue, emptied in vblank |
+| `tools/make_gfx.py` | Tiles, sprites, lit tile variants, cone tables, line-of-sight table |
 
-- **Cones are drawn in the background, not with sprites.** Each 8×8 cell a cone touches
-  gets its own tile from a pool of 64: a copy of the floor tile with the cone ORed in. Floor
-  tiles use only colours 0 and 1, so the cone can only lighten them.
-- **Cones are stored as spans.** Each cone is precomputed as one pixel span per row, so
-  drawing it means filling about 21 short spans, not 107 separate pixels.
-- **Cones are redrawn only when they change,** and the work is spread over three frames:
-  draw cone 1, draw cone 2, then upload. Only the tile bytes that changed are queued.
-- **Detection uses the drawn cone.** It checks the player's 8×13 body box against the same
-  spans and the same visibility cache, so what you see on screen is exactly what the NPC
-  sees.
-- **The hot loops are in SM83 assembly.** That covers span filling, cell visibility, the
-  tile upload, the path search and the VRAM copy. The game holds 60 fps except for the odd
-  frame.
+- **Cones are background tiles, not sprites.** The play area is 40 × 34 quarter-cells of
+  4 × 4 px. A cone is the set of quarter-cells whose centre lies inside it (a table per facing
+  angle, 64 angles), minus those a wall hides. Each quarter-cell keeps one bit per guard. A
+  cell shows one of 16 pre-made lit variants of its tile (checkerboard dots on the light
+  pixels), so moving a cone only rewrites map entries: one byte per changed cell.
+- **Moving a cone is a merge** of the old and new quarter-cell lists (both sorted), so only
+  the quarter-cells that change are touched and a cone never blinks while it moves.
+- **A frame budget keeps 60 fps.** Cone updates run last in the frame and stop at a fixed
+  scan line; whatever is left continues next frame. Path finding starts only early in a
+  frame and also stops in time. The game holds 60 fps on all five levels, with an odd
+  dropped frame.
+- **Line of sight** uses a table of the cells between two cells (one octant, mirrored), with
+  a per-guard cache for its current eye cell. Levels without walls skip it.
+- **Path finding** is a breadth-first search on the 8 px grid, written in assembly. Guards
+  share three distance fields: a guard holds one only while it walks somewhere.
 
 ## Credits
 

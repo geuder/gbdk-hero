@@ -6,29 +6,38 @@
 #define GFX_H
 #include <stdint.h>
 
-extern const uint8_t spr_tiles[104 * 16];
-extern const uint8_t bg_tiles[48 * 16];
+extern const uint8_t spr_tiles[130 * 16];
+extern const uint8_t bg_tiles[66 * 16];
 extern const uint8_t hero_anim[8][4];   /* [sheet row][walk step] -> frame (tiles frame*4) */
-extern const uint16_t cone_off[32];
-extern const uint8_t cone_data[1076];   /* per angle: dy0, rows, (x0, x1) per row */
-extern const uint8_t los_off[49];
-extern const uint8_t los_data[149];
+extern const uint16_t cone_off[64];
+extern const uint8_t cone_data[7560];   /* per angle: count, then (dx, dy) quad offsets */
+extern const uint8_t lit_tiles[75 * 16];
+extern const uint16_t los_off[45];
+extern const uint8_t los_data[315];
 
-#define SPR_TILES   104u
-#define BG_TILES    48u
-#define CONE_LEN    20u
-#define CONE_ANGLES 32u
+#define SPR_TILES   130u
+#define BG_TILES    66u
+#define LIT_TILES   75u
+#define LIT_BASES   5u      /* base tiles 0..LIT_BASES-1 can be lit */
+#define CONE_LEN    60u
+#define CONE_ANGLES 64u
+#define LOS_R       8u
+#define LOS_W       17u
 
 /* sprite tiles */
 #define T_LYING     96u
 #define T_QUESTION  100u
 #define T_BANG      102u
+#define T_EXIT      104u    /* 3 frames x 4 tiles: open (2 drift steps), locked */
+#define T_BAR       116u    /* 7 fills x 2 tiles */
 
 /* background tiles */
 #define B_GROUND    0u      /* 0..2 */
 #define B_FLOOR     3u      /* 3..4 */
 #define B_WALL      5u
 #define B_FONT      6u      /* " A-Z0-9!,.-:" */
-#define B_POOL      128u    /* 128..255: cone tile pool */
+#define B_ARROW     (B_FONT + 42u)   /* left, right */
+#define B_PIT       (B_ARROW + 2u)  /* 16: ravine, by open neighbours up 1 left 2 right 4 down 8 */
+#define B_LIT       (SPR_TILES > 128u ? SPR_TILES : 128u)   /* lit tiles: B_LIT + base * 15 + mask - 1 */
 
 #endif
